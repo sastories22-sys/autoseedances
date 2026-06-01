@@ -456,6 +456,3 @@ function GiscusComments({ slug }: { slug: string }) {
   );
 }
 
-declare module "@tanstack/react-router" {
-  interface FileRoutesByPath {}
-}
