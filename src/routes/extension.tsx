@@ -17,9 +17,9 @@ export const Route = createFileRoute("/extension")({
       { name: "description", content: "Install Auto Seedance for Chrome or Microsoft Edge to automate bulk Dreamina AI image and video generation directly in your browser." },
       { property: "og:title", content: "Install Auto Seedance — Chrome & Edge Extension" },
       { property: "og:description", content: "Automate bulk Dreamina AI image and video generation directly in your browser." },
-      { property: "og:url", content: "https://vizio-automata.lovable.app/extension" },
+      { property: "og:url", content: "https://autoseedance.site/extension" },
     ],
-    links: [{ rel: "canonical", href: "https://vizio-automata.lovable.app/extension" }],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/extension" }],
   }),
 });
 

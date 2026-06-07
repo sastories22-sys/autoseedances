@@ -24,9 +24,9 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "The bridge between you and your AI tools. Queue hundreds of prompts, automate Dreamina image & video generation, and streamline bulk AI creation directly in your browser." },
       { property: "og:title", content: "Auto Seedance — Bulk AI Images & Videos Generator Automation" },
       { property: "og:description", content: "Queue hundreds of prompts, automate Dreamina image & video generation, and streamline bulk AI creation directly in your browser." },
-      { property: "og:url", content: "https://vizio-automata.lovable.app/" },
+      { property: "og:url", content: "https://autoseedance.site/" },
     ],
-    links: [{ rel: "canonical", href: "https://vizio-automata.lovable.app/" }],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/" }],
   }),
 });
 

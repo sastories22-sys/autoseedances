@@ -10,9 +10,9 @@ export const Route = createFileRoute("/terms")({
       { name: "description", content: "The terms governing your use of the Auto Seedance browser extension and dashboard." },
       { property: "og:title", content: "Terms of Service — Auto Seedance" },
       { property: "og:description", content: "Terms governing your use of Auto Seedance." },
-      { property: "og:url", content: "https://vizio-automata.lovable.app/terms" },
+      { property: "og:url", content: "https://autoseedance.site/terms" },
     ],
-    links: [{ rel: "canonical", href: "https://vizio-automata.lovable.app/terms" }],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/terms" }],
   }),
 });
 

@@ -14,9 +14,9 @@ export const Route = createFileRoute("/pricing")({
       { name: "description", content: "Auto Seedance is currently 100% free during Early Access. Unlimited bulk AI prompt queueing and browser-based Dreamina automation." },
       { property: "og:title", content: "Pricing — Auto Seedance" },
       { property: "og:description", content: "100% free during Early Access. Unlimited bulk AI automation." },
-      { property: "og:url", content: "https://vizio-automata.lovable.app/pricing" },
+      { property: "og:url", content: "https://autoseedance.site/pricing" },
     ],
-    links: [{ rel: "canonical", href: "https://vizio-automata.lovable.app/pricing" }],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/pricing" }],
   }),
 });
 
