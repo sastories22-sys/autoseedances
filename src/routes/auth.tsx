@@ -2,13 +2,15 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureUserBootstrap, getSafeAuthRedirect } from "@/lib/auth";
 import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { Sparkles, Mail, Lock, Loader2 } from "lucide-react";
+import { AlertCircle, Sparkles, Mail, Lock, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -28,35 +30,53 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const redirectTo = typeof window !== "undefined"
+    ? getSafeAuthRedirect(new URLSearchParams(window.location.search).get("redirect"))
+    : "/dashboard";
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard" });
+      if (data.session) navigate({ to: redirectTo as any, replace: true });
     });
-  }, [navigate]);
+  }, [navigate, redirectTo]);
 
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setErrorMessage(null);
+    setNotice(null);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email, password,
           options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
             data: { display_name: name },
           },
         });
         if (error) throw error;
-        toast.success("Account created! Check your email to confirm.");
+        if (data.session) {
+          await ensureUserBootstrap(data.session.user);
+          toast.success("Account created");
+          navigate({ to: redirectTo as any, replace: true });
+        } else {
+          setNotice("Account created. Check your email and open the confirmation link to continue.");
+          toast.success("Check your email to confirm your account");
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        if (data.user) await ensureUserBootstrap(data.user);
         toast.success("Welcome back");
-        navigate({ to: "/dashboard" });
+        navigate({ to: redirectTo as any, replace: true });
       }
     } catch (err: any) {
-      toast.error(err.message ?? "Something went wrong");
+      const message = err.message ?? "Something went wrong";
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -64,16 +84,35 @@ function AuthPage() {
 
   async function handleGoogle() {
     setLoading(true);
+    setErrorMessage(null);
+    setNotice(null);
+    if (!window.location.hostname.endsWith("lovableproject.com") && !window.location.hostname.endsWith("lovable.app")) {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+        },
+      });
+      if (error) {
+        setErrorMessage(error.message || "Google sign-in failed");
+        toast.error(error.message || "Google sign-in failed");
+        setLoading(false);
+      }
+      return;
+    }
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: `${window.location.origin}/dashboard`,
+      redirect_uri: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
     });
     if (result.error) {
-      toast.error("Google sign-in failed");
+      setErrorMessage(result.error.message || "Google sign-in failed");
+      toast.error(result.error.message || "Google sign-in failed");
       setLoading(false);
       return;
     }
     if (result.redirected) return;
-    navigate({ to: "/dashboard" });
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user) await ensureUserBootstrap(data.session.user);
+    navigate({ to: redirectTo as any, replace: true });
   }
 
   return (
@@ -92,6 +131,18 @@ function AuthPage() {
           <p className="text-sm text-muted-foreground text-center mt-1">
             {mode === "signin" ? "Sign in to your dashboard" : "Start automating in minutes"}
           </p>
+          {errorMessage && (
+            <Alert variant="destructive" className="mt-5 bg-destructive/10">
+              <AlertCircle className="size-4" />
+              <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
+          )}
+          {notice && (
+            <Alert className="mt-5 border-primary/30 bg-primary/10 text-foreground">
+              <Mail className="size-4" />
+              <AlertDescription>{notice}</AlertDescription>
+            </Alert>
+          )}
           <Button onClick={handleGoogle} disabled={loading} variant="outline" className="w-full mt-6 border-border bg-muted/50">
             <GoogleIcon /> Continue with Google
           </Button>

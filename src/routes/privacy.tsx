@@ -10,9 +10,9 @@ export const Route = createFileRoute("/privacy")({
       { name: "description", content: "How Auto Seedance handles your data: no selling of personal information, no password collection, local browser storage, and minimal permissions." },
       { property: "og:title", content: "Privacy Policy — Auto Seedance" },
       { property: "og:description", content: "Read how Auto Seedance respects your privacy." },
-      { property: "og:url", content: "https://vizio-automata.lovable.app/privacy" },
+      { property: "og:url", content: "https://autoseedance.site/privacy" },
     ],
-    links: [{ rel: "canonical", href: "https://vizio-automata.lovable.app/privacy" }],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/privacy" }],
   }),
 });
 

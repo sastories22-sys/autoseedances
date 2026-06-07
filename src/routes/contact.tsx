@@ -13,9 +13,9 @@ export const Route = createFileRoute("/contact")({
       { name: "description", content: "Get in touch with the Auto Seedance team for support, feedback, or partnership inquiries." },
       { property: "og:title", content: "Contact — Auto Seedance" },
       { property: "og:description", content: "Get in touch with the Auto Seedance team." },
-      { property: "og:url", content: "https://vizio-automata.lovable.app/contact" },
+      { property: "og:url", content: "https://autoseedance.site/contact" },
     ],
-    links: [{ rel: "canonical", href: "https://vizio-automata.lovable.app/contact" }],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/contact" }],
   }),
 });
 
