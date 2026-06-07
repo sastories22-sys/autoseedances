@@ -26,7 +26,7 @@ export function DashboardLayout() {
 
   useEffect(() => {
     if (!loading && !session) navigate({ to: "/auth", search: { redirect: path } as any, replace: true });
-  }, [loading, session, navigate]);
+  }, [loading, session, navigate, path]);
 
   useEffect(() => {
     if (!session) return;
