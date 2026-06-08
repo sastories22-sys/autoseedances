@@ -25,6 +25,7 @@ import { Route as BlogIndexRouteImport } from './routes/blog.index'
 import { Route as AuthIndexRouteImport } from './routes/auth.index'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
 import { Route as DashboardQueueRouteImport } from './routes/dashboard.queue'
+import { Route as DashboardProfileRouteImport } from './routes/dashboard.profile'
 import { Route as DashboardLibraryRouteImport } from './routes/dashboard.library'
 import { Route as DashboardExtensionRouteImport } from './routes/dashboard.extension'
 import { Route as DashboardBillingRouteImport } from './routes/dashboard.billing'
@@ -112,6 +113,11 @@ const DashboardQueueRoute = DashboardQueueRouteImport.update({
   path: '/queue',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardProfileRoute = DashboardProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardLibraryRoute = DashboardLibraryRouteImport.update({
   id: '/library',
   path: '/library',
@@ -161,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/billing': typeof DashboardBillingRoute
   '/dashboard/extension': typeof DashboardExtensionRoute
   '/dashboard/library': typeof DashboardLibraryRoute
+  '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/queue': typeof DashboardQueueRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/auth/': typeof AuthIndexRoute
@@ -183,6 +190,7 @@ export interface FileRoutesByTo {
   '/dashboard/billing': typeof DashboardBillingRoute
   '/dashboard/extension': typeof DashboardExtensionRoute
   '/dashboard/library': typeof DashboardLibraryRoute
+  '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/queue': typeof DashboardQueueRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/auth': typeof AuthIndexRoute
@@ -208,6 +216,7 @@ export interface FileRoutesById {
   '/dashboard/billing': typeof DashboardBillingRoute
   '/dashboard/extension': typeof DashboardExtensionRoute
   '/dashboard/library': typeof DashboardLibraryRoute
+  '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/queue': typeof DashboardQueueRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/auth/': typeof AuthIndexRoute
@@ -234,6 +243,7 @@ export interface FileRouteTypes {
     | '/dashboard/billing'
     | '/dashboard/extension'
     | '/dashboard/library'
+    | '/dashboard/profile'
     | '/dashboard/queue'
     | '/dashboard/settings'
     | '/auth/'
@@ -256,6 +266,7 @@ export interface FileRouteTypes {
     | '/dashboard/billing'
     | '/dashboard/extension'
     | '/dashboard/library'
+    | '/dashboard/profile'
     | '/dashboard/queue'
     | '/dashboard/settings'
     | '/auth'
@@ -280,6 +291,7 @@ export interface FileRouteTypes {
     | '/dashboard/billing'
     | '/dashboard/extension'
     | '/dashboard/library'
+    | '/dashboard/profile'
     | '/dashboard/queue'
     | '/dashboard/settings'
     | '/auth/'
@@ -417,6 +429,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardQueueRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/profile': {
+      id: '/dashboard/profile'
+      path: '/profile'
+      fullPath: '/dashboard/profile'
+      preLoaderRoute: typeof DashboardProfileRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/library': {
       id: '/dashboard/library'
       path: '/library'
@@ -479,6 +498,7 @@ interface DashboardRouteChildren {
   DashboardBillingRoute: typeof DashboardBillingRoute
   DashboardExtensionRoute: typeof DashboardExtensionRoute
   DashboardLibraryRoute: typeof DashboardLibraryRoute
+  DashboardProfileRoute: typeof DashboardProfileRoute
   DashboardQueueRoute: typeof DashboardQueueRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
@@ -489,6 +509,7 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardBillingRoute: DashboardBillingRoute,
   DashboardExtensionRoute: DashboardExtensionRoute,
   DashboardLibraryRoute: DashboardLibraryRoute,
+  DashboardProfileRoute: DashboardProfileRoute,
   DashboardQueueRoute: DashboardQueueRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
