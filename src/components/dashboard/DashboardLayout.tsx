@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ensureUserBootstrap, signOut, useSession } from "@/lib/auth";
 import {
   LayoutDashboard, ListChecks, Film, Chrome, Settings, Shield,
-  Sparkles, LogOut, Loader2, CreditCard, Play,
+  Sparkles, LogOut, Loader2, CreditCard, Play, User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -15,6 +15,7 @@ const items = [
   { to: "/dashboard/library", label: "Library", icon: Film },
   { to: "/dashboard/extension", label: "Extension", icon: Chrome },
   { to: "/dashboard/billing", label: "Billing", icon: CreditCard },
+  { to: "/dashboard/profile", label: "Profile", icon: User },
   { to: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
