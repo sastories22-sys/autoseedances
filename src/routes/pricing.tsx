@@ -38,8 +38,8 @@ function PricingPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.from("plans").select("*").eq("is_active", true).order("sort_order").then(({ data }) => {
-      setPlans((data ?? []) as Plan[]);
+    (supabase.from as any)("plans").select("*").eq("is_active", true).order("sort_order").then(({ data }: { data: unknown }) => {
+      setPlans(((data as Plan[]) ?? []));
       setLoading(false);
     });
   }, []);
