@@ -158,7 +158,7 @@ function ImageToolPage() {
         }
         try {
           const { data: pollData } = await supabase.functions.invoke("poll-generation", {
-            body: { request_id, model_id },
+            body: JSON.stringify({ request_id, model_id }),
           });
           if (pollData?.status === "completed") {
             if (pollingRef.current) clearInterval(pollingRef.current);
