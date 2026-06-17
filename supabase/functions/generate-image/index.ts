@@ -1,65 +1,41 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-
-const corsHeaders = {
+const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "content-type, authorization, x-client-info, apikey",
 };
-
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   try {
     const FAL_API_KEY = Deno.env.get("FAL_API_KEY");
-    if (!FAL_API_KEY) {
-      return new Response(JSON.stringify({ error: "FAL_API_KEY not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const body = await req.json();
-    const { prompt, image_size, style, num_images, reference_images } = body;
-
-    if (!prompt) {
-      return new Response(JSON.stringify({ error: "Prompt is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const STYLE_MAP: Record<string, string> = {
-      realistic: "photorealistic, high quality photograph",
-      illustration: "digital illustration, vibrant colors",
-      vector: "vector art, clean lines, flat design",
-      "3d": "3D render, cinematic lighting",
+    if (!FAL_API_KEY) throw new Error("FAL_API_KEY missing");
+    const { prompt, image_size, style, num_images, reference_images } = await req.json();
+    if (!prompt) throw new Error("Prompt required");
+    const STYLES: Record<string, string> = {
+      realistic: "photorealistic, high quality",
+      illustration: "digital illustration, vibrant",
+      vector: "vector art, flat design",
+      "3d": "3D render, cinematic",
       anime: "anime style, manga art",
-      oil: "oil painting, classical style",
-      watercolor: "watercolor painting, soft colors",
+      oil: "oil painting",
+      watercolor: "watercolor painting",
     };
-    const styleText = STYLE_MAP[style] || "";
-    const finalPrompt = styleText ? `${prompt}, ${styleText}` : prompt;
-
-    const hasReference = reference_images && reference_images.length > 0;
-
-    let endpoint: string;
-    let falBody: Record<string, unknown>;
-
-    if (hasReference) {
-      endpoint = "https://queue.fal.run/fal-ai/bytedance/seedream/v4.5/edit";
-      falBody = {
+    const finalPrompt = style && STYLES[style] ? `${prompt}, ${STYLES[style]}` : prompt;
+    const hasRef = reference_images && reference_images.length > 0;
+    let modelId: string;
+    let body: Record<string, unknown>;
+    if (hasRef) {
+      modelId = "fal-ai/bytedance/seedream/v4.5/edit";
+      body = {
         prompt: finalPrompt,
-        image_urls: reference_images,
-        image_size: image_size || "auto_2K",
+        image_size: image_size || "auto_4K",
         num_images: num_images || 1,
         max_images: 1,
         enable_safety_checker: true,
+        image_urls: reference_images,
       };
     } else {
-      endpoint = "https://queue.fal.run/fal-ai/bytedance/seedream/v4.5/text-to-image";
-      falBody = {
+      modelId = "fal-ai/bytedance/seedream/v4.5/text-to-image";
+      body = {
         prompt: finalPrompt,
         image_size: image_size || "auto_2K",
         num_images: num_images || 1,
@@ -68,81 +44,35 @@ Deno.serve(async (req) => {
         seed: Math.floor(Math.random() * 999999),
       };
     }
-
-    console.log("Submitting to:", endpoint);
-    console.log("Body:", JSON.stringify(falBody));
-
-    const submitRes = await fetch(endpoint, {
+    const submitRes = await fetch(`https://queue.fal.run/${modelId}`, {
       method: "POST",
-      headers: {
-        "Authorization": `Key ${FAL_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(falBody),
+      headers: { "Authorization": `Key ${FAL_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
-
-    const submitText = await submitRes.text();
-    console.log("Submit response:", submitRes.status, submitText);
-
-    if (!submitRes.ok) {
-      return new Response(JSON.stringify({ error: `Fal.ai submit error: ${submitRes.status} - ${submitText}` }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const submitResult = JSON.parse(submitText);
-    const requestId = submitResult.request_id;
-    const modelId = hasReference
-      ? "fal-ai/bytedance/seedream/v4.5/edit"
-      : "fal-ai/bytedance/seedream/v4.5/text-to-image";
-
-    // Poll for result (max 60 seconds)
-    const statusUrl = `https://queue.fal.run/${modelId}/requests/${requestId}/status`;
-    const resultUrl = `https://queue.fal.run/${modelId}/requests/${requestId}`;
-
+    if (!submitRes.ok) throw new Error(`Submit failed: ${await submitRes.text()}`);
+    const { request_id } = await submitRes.json();
     for (let i = 0; i < 20; i++) {
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      const statusRes = await fetch(statusUrl, {
+      await new Promise(r => setTimeout(r, 3000));
+      const statusRes = await fetch(`https://queue.fal.run/${modelId}/requests/${request_id}/status`, {
         headers: { "Authorization": `Key ${FAL_API_KEY}` },
       });
-      const statusData = await statusRes.json();
-      console.log("Status:", statusData.status);
-
-      if (statusData.status === "COMPLETED") {
-        const resultRes = await fetch(resultUrl, {
+      const { status } = await statusRes.json();
+      if (status === "COMPLETED") {
+        const resultRes = await fetch(`https://queue.fal.run/${modelId}/requests/${request_id}`, {
           headers: { "Authorization": `Key ${FAL_API_KEY}` },
         });
-        const resultData = await resultRes.json();
-        const imageUrls = resultData.images?.map((img: { url: string }) => img.url) || [];
-
-        return new Response(JSON.stringify({
-          success: true,
-          image_urls: imageUrls,
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        const result = await resultRes.json();
+        const image_urls = result.images?.map((img: { url: string }) => img.url) || [];
+        return new Response(JSON.stringify({ success: true, image_urls }), {
+          headers: { ...cors, "Content-Type": "application/json" },
         });
       }
-
-      if (statusData.status === "FAILED") {
-        return new Response(JSON.stringify({ error: "Generation failed on Fal.ai" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      if (status === "FAILED") throw new Error("Generation failed on Fal.ai");
     }
-
-    return new Response(JSON.stringify({ error: "Generation timed out after 60 seconds" }), {
-      status: 504,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-
+    throw new Error("Timeout after 60 seconds");
   } catch (err) {
-    console.error("generate-image error:", err);
     return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...cors, "Content-Type": "application/json" },
     });
   }
 });

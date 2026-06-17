@@ -26,9 +26,6 @@ export const Route = createFileRoute("/tools/video")({
   }),
 });
 
-const SUPABASE_URL = "https://vcercajwtbjbvjhzivjb.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjZXJjYWp3dGJqYnZqaHppdmpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MDczMjYsImV4cCI6MjA5NzA4MzMyNn0.cqIvDEmF6Yyz7bdFQBSrl5DTzcpv6YOxF2zbrFqAs1k";
-
 const RESOLUTIONS = [
   { value: "720p", label: "720p (HD)" },
   { value: "1080p", label: "1080p (Full HD)" },
@@ -51,12 +48,14 @@ function VideoToolPage() {
   const [resolution, setResolution] = useState("720p");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [generateAudio, setGenerateAudio] = useState(true);
-  const [generating, setGenerating] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [pollProgress, setPollProgress] = useState(0);
+  const [referenceImageUrls, setReferenceImageUrls] = useState<string[]>([]);
+  const [referenceVideoUrls, setReferenceVideoUrls] = useState<string[]>([]);
+  const [referenceAudioUrls, setReferenceAudioUrls] = useState<string[]>([]);
   const [generations, setGenerations] = useState<Generation[]>([]);
-  const pollingRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [videoUrls, setVideoUrls] = useState<string[]>([]);
-  const [audioUrls, setAudioUrls] = useState<string[]>([]);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -73,8 +72,7 @@ function VideoToolPage() {
   useEffect(() => {
     if (!userId) return;
     fetchGenerations(userId);
-    const channel = supabase.channel("video-gens").on("postgres_changes", { event: "UPDATE", schema: "public", table: "generations", filter: `user_id=eq.${userId}` }, () => fetchGenerations(userId)).subscribe();
-    return () => { supabase.removeChannel(channel); pollingRef.current.forEach((t) => clearInterval(t)); };
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [userId]);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string[]>>, max: number, current: number) => {
@@ -88,55 +86,10 @@ function VideoToolPage() {
     });
   }, []);
 
-  async function pollForResult(requestId: string, modelId: string, generationId: string, uid: string) {
-    let attempts = 0;
-    const maxAttempts = 200;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/poll-generation`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
-          body: JSON.stringify({ request_id: requestId, model_id: modelId }),
-        });
-        const data = await res.json();
-        if (data.status === "completed") {
-          clearInterval(interval);
-          pollingRef.current.delete(requestId);
-          await supabase.from("generations").update({ status: "done", result_url: data.video_url, thumbnail_url: data.video_url }).eq("id", generationId);
-          fetchGenerations(uid);
-          toast.success("Your video is ready!");
-          return;
-        }
-        if (data.status === "failed") {
-          clearInterval(interval);
-          pollingRef.current.delete(requestId);
-          await supabase.from("generations").update({ status: "failed", error: data.error || "Generation failed" }).eq("id", generationId);
-          fetchGenerations(uid);
-          toast.error("Video generation failed", { description: data.error || "Unknown error" });
-          return;
-        }
-        const progress = Math.min(95, (attempts / maxAttempts) * 100);
-        await supabase.from("generations").update({ settings: { duration, resolution, aspect_ratio: aspectRatio, generate_audio: generateAudio, progress } }).eq("id", generationId);
-        fetchGenerations(uid);
-      } catch (e) {
-        console.error("Poll error:", e);
-      }
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
-        pollingRef.current.delete(requestId);
-        await supabase.from("generations").update({ status: "failed", error: "Generation timed out" }).eq("id", generationId);
-        fetchGenerations(uid);
-        toast.error("Video generation timed out");
-      }
-    }, 5000);
-    pollingRef.current.set(requestId, interval);
-  }
-
-  async function handleGenerate() {
-    if (!userId) { navigate({ to: "/login", replace: true }); return; }
+  const handleGenerate = async () => {
+    if (isGenerating) return;
     if (!prompt.trim()) { toast.error("Please enter a prompt"); return; }
-    if (prompt.length > MAX_PROMPT_LENGTH) { toast.error(`Prompt too long (max ${MAX_PROMPT_LENGTH} characters)`); return; }
+    if (!userId) { navigate({ to: "/login", replace: true }); return; }
 
     const { data: wallet } = await supabase.from("credit_wallets").select("balance").eq("user_id", userId).maybeSingle();
     if (wallet && wallet.balance < CREDITS_PER_VIDEO) {
@@ -144,59 +97,77 @@ function VideoToolPage() {
       return;
     }
 
-    setGenerating(true);
+    setIsGenerating(true);
+    setVideoUrl(null);
+    setPollProgress(0);
+
     try {
       const { data: creditResult, error: creditError } = await supabase.rpc("consume_credits", { _tool: "video", _amount: CREDITS_PER_VIDEO });
       if (creditError || !creditResult?.success) throw new Error(creditResult?.error || creditError?.message || "Failed to deduct credits");
 
-      const { data: genData, error: genError } = await supabase.from("generations").insert({
-        user_id: userId,
-        tool_type: "video",
-        prompt: prompt.trim(),
-        settings: { duration, resolution, aspect_ratio: aspectRatio, generate_audio: generateAudio, has_reference: activeTab === "reference", progress: 0 },
-        status: "processing",
-        credits_used: CREDITS_PER_VIDEO,
-      }).select("id").single();
-      if (genError || !genData) throw new Error("Failed to create generation record");
-
-      const requestBody: Record<string, unknown> = {
-        prompt: prompt.trim(),
-        duration,
-        resolution,
-        aspect_ratio: aspectRatio,
-        generate_audio: generateAudio,
-      };
-
-      if (activeTab === "reference") {
-        requestBody.image_urls = imageUrls;
-        requestBody.video_urls = videoUrls;
-        requestBody.audio_urls = audioUrls;
-      }
-
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-video`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify(requestBody),
+      const hasRef = activeTab === "reference";
+      const { data, error } = await supabase.functions.invoke("generate-video", {
+        body: {
+          prompt: prompt.trim(),
+          resolution: resolution || "720p",
+          duration: duration || "10",
+          aspect_ratio: aspectRatio || "auto",
+          generate_audio: generateAudio ?? true,
+          image_urls: hasRef ? referenceImageUrls : [],
+          video_urls: hasRef ? referenceVideoUrls : [],
+          audio_urls: hasRef ? referenceAudioUrls : [],
+        },
       });
-      const result = await res.json();
-      if (!res.ok || result.error) throw new Error(result.error || "Generation failed");
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
 
-      if (result.request_id && result.model_id) {
-        await supabase.from("generations").update({ external_id: result.request_id }).eq("id", genData.id);
-        pollForResult(result.request_id, result.model_id, genData.id, userId);
-        fetchGenerations(userId);
-        toast.success("Video generation started!", { description: "~2-3 minutes" });
-      }
-      setPrompt("");
-      setImageUrls([]);
-      setVideoUrls([]);
-      setAudioUrls([]);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setGenerating(false);
+      const { request_id, model_id } = data;
+      let pollCount = 0;
+
+      pollingRef.current = setInterval(async () => {
+        pollCount++;
+        setPollProgress(Math.min(pollCount * 2.5, 95));
+        if (pollCount > 40) {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          pollingRef.current = null;
+          setIsGenerating(false);
+          toast.error("Timed out — please try again");
+          return;
+        }
+        try {
+          const { data: pollData } = await supabase.functions.invoke("poll-generation", {
+            body: { request_id, model_id },
+          });
+          if (pollData?.status === "completed" && pollData?.video_url) {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            pollingRef.current = null;
+            setPollProgress(100);
+            setVideoUrl(pollData.video_url);
+            setIsGenerating(false);
+
+            await supabase.from("generations").insert({
+              user_id: userId, tool_type: "video", prompt: prompt.trim(),
+              settings: { duration, resolution, aspect_ratio: aspectRatio, generate_audio: generateAudio },
+              status: "done", result_url: pollData.video_url, thumbnail_url: pollData.video_url, credits_used: CREDITS_PER_VIDEO,
+            });
+            fetchGenerations(userId);
+            toast.success("Your video is ready!");
+          }
+          if (pollData?.status === "failed") {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            pollingRef.current = null;
+            setIsGenerating(false);
+            toast.error("Video generation failed");
+          }
+        } catch (e) {
+          console.error("Poll error:", e);
+        }
+      }, 5000);
+    } catch (e: unknown) {
+      setIsGenerating(false);
+      toast.error(e instanceof Error ? e.message : "Generation failed");
     }
-  }
+  };
 
   async function toggleFavorite(id: string, current: boolean) {
     await supabase.from("generations").update({ is_favorite: !current }).eq("id", id);
@@ -206,14 +177,6 @@ function VideoToolPage() {
     await supabase.from("generations").delete().eq("id", id);
     if (userId) fetchGenerations(userId);
   }
-
-  const getStatusMessage = (progress: number) => {
-    if (progress < 10) return "Queued...";
-    if (progress < 40) return "Processing frames...";
-    if (progress < 70) return "Adding audio...";
-    if (progress < 95) return "Finalizing...";
-    return "Almost done...";
-  };
 
   if (!userId) return null;
 
@@ -244,24 +207,24 @@ function VideoToolPage() {
                   <Label>Prompt</Label>
                   <span className="text-xs text-muted-foreground">{prompt.length}/{MAX_PROMPT_LENGTH}</span>
                 </div>
-                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe your video scene..." rows={4} className="mt-1 bg-muted/50 border-border resize-none" disabled={generating} maxLength={MAX_PROMPT_LENGTH} />
+                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe your video scene..." rows={4} className="mt-1 bg-muted/50 border-border resize-none" disabled={isGenerating} maxLength={MAX_PROMPT_LENGTH} />
               </div>
               <div>
                 <div className="flex justify-between items-center mb-2"><Label>Duration: {duration}s</Label></div>
-                <Slider value={[duration]} onValueChange={([v]) => setDuration(v)} min={1} max={10} step={1} disabled={generating} className="w-full" />
+                <Slider value={[duration]} onValueChange={([v]) => setDuration(v)} min={1} max={10} step={1} disabled={isGenerating} className="w-full" />
                 <div className="flex justify-between text-xs text-muted-foreground mt-1"><span>1s</span><span>10s</span></div>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <Label>Resolution</Label>
-                  <Select value={resolution} onValueChange={setResolution} disabled={generating}>
+                  <Select value={resolution} onValueChange={setResolution} disabled={isGenerating}>
                     <SelectTrigger className="mt-1 bg-muted/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>{RESOLUTIONS.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label>Aspect Ratio</Label>
-                  <Select value={aspectRatio} onValueChange={setAspectRatio} disabled={generating}>
+                  <Select value={aspectRatio} onValueChange={setAspectRatio} disabled={isGenerating}>
                     <SelectTrigger className="mt-1 bg-muted/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>{ASPECT_RATIOS.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
                   </Select>
@@ -272,7 +235,7 @@ function VideoToolPage() {
                   <Label className="text-sm font-medium">Generate Audio</Label>
                   <p className="text-xs text-muted-foreground mt-1">AI generates matching background audio</p>
                 </div>
-                <Switch checked={generateAudio} onCheckedChange={setGenerateAudio} disabled={generating} />
+                <Switch checked={generateAudio} onCheckedChange={setGenerateAudio} disabled={isGenerating} />
               </div>
             </TabsContent>
 
@@ -282,23 +245,23 @@ function VideoToolPage() {
                   <Label>Prompt</Label>
                   <span className="text-xs text-muted-foreground">{prompt.length}/{MAX_PROMPT_LENGTH}</span>
                 </div>
-                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe your video. Use [image1], [video1], [audio1] in prompt to reference uploads." rows={4} className="mt-1 bg-muted/50 border-border resize-none" disabled={generating} maxLength={MAX_PROMPT_LENGTH} />
+                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe your video. Use [image1], [video1], [audio1] in prompt to reference uploads." rows={4} className="mt-1 bg-muted/50 border-border resize-none" disabled={isGenerating} maxLength={MAX_PROMPT_LENGTH} />
               </div>
               <div>
                 <Label>Reference Images (up to 9)</Label>
                 <div className="p-4 border border-border rounded-lg bg-muted/30">
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {imageUrls.map((img, idx) => (
+                    {referenceImageUrls.map((img, idx) => (
                       <div key={idx} className="relative">
                         <img src={img} alt={`Ref ${idx + 1}`} className="w-16 h-16 object-cover rounded" />
-                        <button onClick={() => setImageUrls((p) => p.filter((_, i) => i !== idx))} className="absolute -top-1 -right-1 size-4 bg-destructive text-white rounded-full flex items-center justify-center"><X className="size-2" /></button>
+                        <button onClick={() => setReferenceImageUrls((p) => p.filter((_, i) => i !== idx))} className="absolute -top-1 -right-1 size-4 bg-destructive text-white rounded-full flex items-center justify-center"><X className="size-2" /></button>
                       </div>
                     ))}
                   </div>
-                  {imageUrls.length < 9 && (
+                  {referenceImageUrls.length < 9 && (
                     <label className="flex items-center gap-2 px-3 py-2 bg-muted hover:bg-muted/80 rounded cursor-pointer transition">
                       <ImageIcon className="size-4" /><span className="text-sm">Add Image</span>
-                      <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFileUpload(e, setImageUrls, 9, imageUrls.length)} disabled={generating} />
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFileUpload(e, setReferenceImageUrls, 9, referenceImageUrls.length)} disabled={isGenerating} />
                     </label>
                   )}
                 </div>
@@ -307,17 +270,17 @@ function VideoToolPage() {
                 <Label>Reference Videos (up to 3)</Label>
                 <div className="p-4 border border-border rounded-lg bg-muted/30">
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {videoUrls.map((vid, idx) => (
+                    {referenceVideoUrls.map((vid, idx) => (
                       <div key={idx} className="relative">
                         <video src={vid} className="w-20 h-14 object-cover rounded bg-black" />
-                        <button onClick={() => setVideoUrls((p) => p.filter((_, i) => i !== idx))} className="absolute -top-1 -right-1 size-4 bg-destructive text-white rounded-full flex items-center justify-center"><X className="size-2" /></button>
+                        <button onClick={() => setReferenceVideoUrls((p) => p.filter((_, i) => i !== idx))} className="absolute -top-1 -right-1 size-4 bg-destructive text-white rounded-full flex items-center justify-center"><X className="size-2" /></button>
                       </div>
                     ))}
                   </div>
-                  {videoUrls.length < 3 && (
+                  {referenceVideoUrls.length < 3 && (
                     <label className="flex items-center gap-2 px-3 py-2 bg-muted hover:bg-muted/80 rounded cursor-pointer transition">
                       <Video className="size-4" /><span className="text-sm">Add Video</span>
-                      <input type="file" accept="video/*" multiple className="hidden" onChange={(e) => handleFileUpload(e, setVideoUrls, 3, videoUrls.length)} disabled={generating} />
+                      <input type="file" accept="video/*" multiple className="hidden" onChange={(e) => handleFileUpload(e, setReferenceVideoUrls, 3, referenceVideoUrls.length)} disabled={isGenerating} />
                     </label>
                   )}
                 </div>
@@ -326,36 +289,36 @@ function VideoToolPage() {
                 <Label>Reference Audios (up to 3)</Label>
                 <div className="p-4 border border-border rounded-lg bg-muted/30">
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {audioUrls.map((aud, idx) => (
+                    {referenceAudioUrls.map((aud, idx) => (
                       <div key={idx} className="relative flex items-center gap-2 px-2 py-1 bg-muted rounded">
                         <Music className="size-4" /><span className="text-xs">audio{idx + 1}</span>
-                        <button onClick={() => setAudioUrls((p) => p.filter((_, i) => i !== idx))} className="size-4 bg-destructive text-white rounded-full flex items-center justify-center"><X className="size-2" /></button>
+                        <button onClick={() => setReferenceAudioUrls((p) => p.filter((_, i) => i !== idx))} className="size-4 bg-destructive text-white rounded-full flex items-center justify-center"><X className="size-2" /></button>
                       </div>
                     ))}
                   </div>
-                  {audioUrls.length < 3 && (
+                  {referenceAudioUrls.length < 3 && (
                     <label className="flex items-center gap-2 px-3 py-2 bg-muted hover:bg-muted/80 rounded cursor-pointer transition">
                       <Music className="size-4" /><span className="text-sm">Add Audio</span>
-                      <input type="file" accept="audio/*" multiple className="hidden" onChange={(e) => handleFileUpload(e, setAudioUrls, 3, audioUrls.length)} disabled={generating} />
+                      <input type="file" accept="audio/*" multiple className="hidden" onChange={(e) => handleFileUpload(e, setReferenceAudioUrls, 3, referenceAudioUrls.length)} disabled={isGenerating} />
                     </label>
                   )}
                 </div>
               </div>
               <div>
                 <div className="flex justify-between items-center mb-2"><Label>Duration: {duration}s</Label></div>
-                <Slider value={[duration]} onValueChange={([v]) => setDuration(v)} min={1} max={10} step={1} disabled={generating} className="w-full" />
+                <Slider value={[duration]} onValueChange={([v]) => setDuration(v)} min={1} max={10} step={1} disabled={isGenerating} className="w-full" />
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <Label>Resolution</Label>
-                  <Select value={resolution} onValueChange={setResolution} disabled={generating}>
+                  <Select value={resolution} onValueChange={setResolution} disabled={isGenerating}>
                     <SelectTrigger className="mt-1 bg-muted/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>{RESOLUTIONS.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label>Aspect Ratio</Label>
-                  <Select value={aspectRatio} onValueChange={setAspectRatio} disabled={generating}>
+                  <Select value={aspectRatio} onValueChange={setAspectRatio} disabled={isGenerating}>
                     <SelectTrigger className="mt-1 bg-muted/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>{ASPECT_RATIOS.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
                   </Select>
@@ -366,17 +329,33 @@ function VideoToolPage() {
                   <Label className="text-sm font-medium">Generate Audio</Label>
                   <p className="text-xs text-muted-foreground mt-1">AI generates matching background audio</p>
                 </div>
-                <Switch checked={generateAudio} onCheckedChange={setGenerateAudio} disabled={generating} />
+                <Switch checked={generateAudio} onCheckedChange={setGenerateAudio} disabled={isGenerating} />
               </div>
             </TabsContent>
           </Tabs>
+
+          {isGenerating && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Generating video... (~2-3 minutes)</span>
+              </div>
+              <Progress value={pollProgress} className="h-2" />
+            </div>
+          )}
+
+          {videoUrl && !isGenerating && (
+            <div className="mt-6 rounded-xl overflow-hidden border border-border">
+              <video src={videoUrl} controls className="w-full" />
+            </div>
+          )}
 
           <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-muted-foreground mt-4">
             <Clock className="size-4 text-amber-500" />
             <span>Video generation takes ~2-3 minutes. You can browse history while waiting.</span>
           </div>
-          <Button onClick={handleGenerate} disabled={generating || !prompt.trim()} className="mt-6 btn-gradient text-white border-0">
-            {generating ? <><Loader2 className="size-4 mr-2 animate-spin" /> Starting...</> : <><Sparkles className="size-4 mr-2" /> Generate Video ({CREDITS_PER_VIDEO} credits)</>}
+          <Button onClick={handleGenerate} disabled={isGenerating || !prompt.trim()} className="mt-6 btn-gradient text-white border-0">
+            {isGenerating ? <><Loader2 className="size-4 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="size-4 mr-2" /> Generate Video ({CREDITS_PER_VIDEO} credits)</>}
           </Button>
         </Card>
 
@@ -389,53 +368,49 @@ function VideoToolPage() {
             </Card>
           ) : (
             <div className="space-y-4 mt-4">
-              {generations.map((gen) => {
-                const progress = gen.settings?.progress || 0;
-                return (
-                  <Card key={gen.id} className="glass border-0 overflow-hidden">
-                    <div className="flex flex-col md:flex-row gap-4 p-4">
-                      <div className="w-full md:w-48 shrink-0 aspect-video bg-black rounded-lg overflow-hidden grid place-items-center relative">
-                        {gen.result_url ? (
-                          <video src={gen.result_url} controls className="size-full object-contain" />
-                        ) : gen.status === "processing" ? (
-                          <div className="flex flex-col items-center gap-2">
-                            <Loader2 className="size-8 animate-spin text-primary" />
-                            <span className="text-xs text-white">{getStatusMessage(progress)}</span>
-                            <Progress value={progress} className="w-20" />
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center gap-2 text-destructive">
-                            <AlertCircle className="size-6" />
-                            <span className="text-xs">{gen.error || "Failed"}</span>
-                          </div>
-                        )}
-                        {gen.is_favorite && gen.result_url && <div className="absolute top-2 right-2"><Heart className="size-4 fill-red-500 text-red-500" /></div>}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm line-clamp-2">{gen.prompt}</p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <Badge variant="outline">{gen.settings?.duration || 5}s</Badge>
-                          <Badge variant="outline">{gen.settings?.resolution || "720p"}</Badge>
-                          <Badge variant="outline">{gen.settings?.aspect_ratio || "16:9"}</Badge>
-                          <span>{gen.credits_used} credits</span>
-                          <span className="ml-auto">{new Date(gen.created_at).toLocaleDateString()}</span>
+              {generations.map((gen) => (
+                <Card key={gen.id} className="glass border-0 overflow-hidden">
+                  <div className="flex flex-col md:flex-row gap-4 p-4">
+                    <div className="w-full md:w-48 shrink-0 aspect-video bg-black rounded-lg overflow-hidden grid place-items-center relative">
+                      {gen.result_url ? (
+                        <video src={gen.result_url} controls className="size-full object-contain" />
+                      ) : gen.status === "processing" ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="size-8 animate-spin text-primary" />
+                          <span className="text-xs text-white">Processing...</span>
                         </div>
-                      </div>
-                      <div className="flex md:flex-col gap-2 justify-end">
-                        <Button variant="ghost" size="sm" onClick={() => toggleFavorite(gen.id, gen.is_favorite)}>
-                          <Heart className={`size-4 ${gen.is_favorite ? "fill-red-500 text-red-500" : ""}`} />
-                        </Button>
-                        {gen.result_url && (
-                          <Button variant="ghost" size="sm" asChild>
-                            <a href={gen.result_url} download target="_blank" rel="noopener noreferrer"><Download className="size-4" /></a>
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={() => deleteGeneration(gen.id)}><Trash2 className="size-4" /></Button>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 text-destructive">
+                          <AlertCircle className="size-6" />
+                          <span className="text-xs">{gen.error || "Failed"}</span>
+                        </div>
+                      )}
+                      {gen.is_favorite && gen.result_url && <div className="absolute top-2 right-2"><Heart className="size-4 fill-red-500 text-red-500" /></div>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm line-clamp-2">{gen.prompt}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline">{gen.settings?.duration || 5}s</Badge>
+                        <Badge variant="outline">{gen.settings?.resolution || "720p"}</Badge>
+                        <Badge variant="outline">{gen.settings?.aspect_ratio || "16:9"}</Badge>
+                        <span>{gen.credits_used} credits</span>
+                        <span className="ml-auto">{new Date(gen.created_at).toLocaleDateString()}</span>
                       </div>
                     </div>
-                  </Card>
-                );
-              })}
+                    <div className="flex md:flex-col gap-2 justify-end">
+                      <Button variant="ghost" size="sm" onClick={() => toggleFavorite(gen.id, gen.is_favorite)}>
+                        <Heart className={`size-4 ${gen.is_favorite ? "fill-red-500 text-red-500" : ""}`} />
+                      </Button>
+                      {gen.result_url && (
+                        <Button variant="ghost" size="sm" asChild>
+                          <a href={gen.result_url} download target="_blank" rel="noopener noreferrer"><Download className="size-4" /></a>
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => deleteGeneration(gen.id)}><Trash2 className="size-4" /></Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
           )}
         </div>

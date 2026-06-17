@@ -7,14 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
   Image as ImageIcon, Loader as Loader2, Download, Heart, Trash2, Sparkles,
-  X, Plus, Upload, ZoomIn, ChevronDown, ChevronUp, Copy, ArrowLeft
+  X, Plus, Upload, ZoomIn, Copy, ArrowLeft
 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -28,11 +28,9 @@ export const Route = createFileRoute("/tools/image")({
   }),
 });
 
-const SUPABASE_URL = "https://vcercajwtbjbvjhzivjb.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjZXJjYWp3dGJqYnZqaHppdmpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MDczMjYsImV4cCI6MjA5NzA4MzMyNn0.cqIvDEmF6Yyz7bdFQBSrl5DTzcpv6YOxF2zbrFqAs1k";
-
 const IMAGE_SIZES = [
   { value: "auto_2K", label: "Auto 2K" },
+  { value: "auto_4K", label: "Auto 4K" },
   { value: "square_hd", label: "Square HD" },
   { value: "landscape_4_3", label: "Landscape (4:3)" },
   { value: "portrait_4_3", label: "Portrait (4:3)" },
@@ -48,6 +46,8 @@ const STYLES = [
   { value: "watercolor", label: "Watercolor" },
 ];
 
+const CREDITS_PER_IMAGE = 5;
+const MAX_PROMPT_LENGTH = 4000;
 type Generation = Tables<"generations">;
 
 function ImageToolPage() {
@@ -55,46 +55,31 @@ function ImageToolPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("text");
   const [prompt, setPrompt] = useState("");
-  const [imageSize, setImageSize] = useState("auto_2K");
-  const [style, setStyle] = useState("realistic");
-  const [numImages, setNumImages] = useState(1);
+  const [selectedSize, setSelectedSize] = useState("auto_2K");
+  const [selectedStyle, setSelectedStyle] = useState("realistic");
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState("");
-  const [generating, setGenerating] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [generations, setGenerations] = useState<Generation[]>([]);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
-  const CREDITS_PER_IMAGE = 5;
-  const MAX_PROMPT_LENGTH = 4000;
-
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) {
-        navigate({ to: "/login", replace: true });
-        return;
-      }
+      if (!user) { navigate({ to: "/login", replace: true }); return; }
       setUserId(user.id);
     });
   }, [navigate]);
 
   async function fetchGenerations(uid: string) {
-    const { data } = await supabase
-      .from("generations")
-      .select("*")
-      .eq("user_id", uid)
-      .eq("tool_type", "image")
-      .order("created_at", { ascending: false })
-      .limit(30);
+    const { data } = await supabase.from("generations").select("*").eq("user_id", uid).eq("tool_type", "image").order("created_at", { ascending: false }).limit(30);
     setGenerations((data as Generation[]) ?? []);
   }
 
   useEffect(() => {
     if (!userId) return;
     fetchGenerations(userId);
-    const channel = supabase
-      .channel("image-generations")
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "generations", filter: `user_id=eq.${userId}` }, () => fetchGenerations(userId))
-      .subscribe();
+    const channel = supabase.channel("image-gens").on("postgres_changes", { event: "UPDATE", schema: "public", table: "generations", filter: `user_id=eq.${userId}` }, () => fetchGenerations(userId)).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
@@ -105,7 +90,7 @@ function ImageToolPage() {
       if (referenceImages.length >= 10) { toast.error("Maximum 10 reference images"); return; }
       if (file.size > 10 * 1024 * 1024) { toast.error("File too large (max 10MB)"); return; }
       const reader = new FileReader();
-      reader.onload = (event) => { const base64 = event.target?.result as string; if (base64) setReferenceImages((prev) => [...prev, base64]); };
+      reader.onload = (ev) => { const b = ev.target?.result as string; if (b) setReferenceImages((prev) => [...prev, b]); };
       reader.readAsDataURL(file);
     });
   }, [referenceImages.length]);
@@ -121,66 +106,55 @@ function ImageToolPage() {
     setReferenceImages((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  async function handleGenerate() {
-    if (!userId) { navigate({ to: "/login", replace: true }); return; }
+  const handleGenerate = async () => {
+    if (isGenerating) return;
     if (!prompt.trim()) { toast.error("Please enter a prompt"); return; }
-    if (prompt.length > MAX_PROMPT_LENGTH) { toast.error(`Prompt too long (max ${MAX_PROMPT_LENGTH} characters)`); return; }
+    if (!userId) { navigate({ to: "/login", replace: true }); return; }
 
     const { data: wallet } = await supabase.from("credit_wallets").select("balance").eq("user_id", userId).maybeSingle();
-    if (wallet && wallet.balance < CREDITS_PER_IMAGE * numImages) {
-      toast.error("Insufficient credits — Upgrade your plan", { action: { label: "Upgrade", onClick: () => window.location.href = "/pricing" } });
+    if (wallet && wallet.balance < CREDITS_PER_IMAGE) {
+      toast.error("Insufficient credits", { action: { label: "Upgrade", onClick: () => window.location.href = "/pricing" } });
       return;
     }
 
-    setGenerating(true);
+    setIsGenerating(true);
     try {
-      const { data: creditResult, error: creditError } = await supabase.rpc("consume_credits", { _tool: "image", _amount: CREDITS_PER_IMAGE * numImages });
+      const { data: creditResult, error: creditError } = await supabase.rpc("consume_credits", { _tool: "image", _amount: CREDITS_PER_IMAGE });
       if (creditError || !creditResult?.success) throw new Error(creditResult?.error || creditError?.message || "Failed to deduct credits");
 
-      const { data: genData, error: genError } = await supabase
-        .from("generations")
-        .insert({ user_id: userId, tool_type: "image", prompt: prompt.trim(), settings: { image_size: imageSize, style, num_images: numImages, has_reference_images: activeTab === "reference" }, status: "processing", credits_used: CREDITS_PER_IMAGE * numImages })
-        .select("id")
-        .single();
-
-      if (genError || !genData) throw new Error("Failed to create generation record");
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 70000);
-
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-image`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({
-          prompt: prompt.trim(), image_size: imageSize, style, num_images: numImages,
-          reference_images: activeTab === "reference" ? referenceImages : undefined,
-        }),
-        signal: controller.signal,
+      const hasRef = activeTab === "reference" && referenceImages.length > 0;
+      const { data, error } = await supabase.functions.invoke("generate-image", {
+        body: {
+          prompt: prompt.trim(),
+          image_size: selectedSize || "auto_2K",
+          style: selectedStyle || "realistic",
+          num_images: 1,
+          reference_images: hasRef ? referenceImages : [],
+        },
       });
-      clearTimeout(timeoutId);
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      if (data?.image_urls?.length > 0) {
+        setGeneratedImages((prev) => [...data.image_urls, ...prev]);
 
-      const result = await res.json();
-      if (!res.ok || result.error) throw new Error(result.error || "Generation failed");
-
-      if (result.image_urls && result.image_urls.length > 0) {
-        const primaryUrl = result.image_urls[0];
-        await supabase.from("generations").update({ status: "done", result_url: primaryUrl, thumbnail_url: primaryUrl }).eq("id", genData.id);
-        toast.success("Image generated!");
+        const primaryUrl = data.image_urls[0];
+        await supabase.from("generations").insert({
+          user_id: userId, tool_type: "image", prompt: prompt.trim(),
+          settings: { image_size: selectedSize, style: selectedStyle, has_reference_images: hasRef },
+          status: "done", result_url: primaryUrl, thumbnail_url: primaryUrl, credits_used: CREDITS_PER_IMAGE,
+        });
         fetchGenerations(userId);
-        setLightboxImage(primaryUrl);
+        toast.success("Image generated!");
       } else {
         throw new Error("No images returned");
       }
-
-      setPrompt("");
-      setReferenceImages([]);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong";
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Generation failed";
       toast.error(message);
     } finally {
-      setGenerating(false);
+      setIsGenerating(false);
     }
-  }
+  };
 
   async function toggleFavorite(id: string, current: boolean) {
     await supabase.from("generations").update({ is_favorite: !current }).eq("id", id);
@@ -192,13 +166,6 @@ function ImageToolPage() {
     if (userId) fetchGenerations(userId);
   }
 
-  function copyPrompt(gen: Generation) {
-    setPrompt(gen.prompt);
-    if (gen.settings?.style) setStyle(gen.settings.style as string);
-    if (gen.settings?.image_size) setImageSize(gen.settings.image_size as string);
-    toast.success("Prompt copied to form");
-  }
-
   if (!userId) return null;
 
   return (
@@ -207,9 +174,7 @@ function ImageToolPage() {
       <div className="p-6 md:p-10 max-w-6xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
           <Link to="/" className="text-muted-foreground hover:text-foreground transition"><ArrowLeft className="size-5" /></Link>
-          <div className="size-10 rounded-xl btn-gradient grid place-items-center">
-            <ImageIcon className="size-5 text-white" />
-          </div>
+          <div className="size-10 rounded-xl btn-gradient grid place-items-center"><ImageIcon className="size-5 text-white" /></div>
           <div>
             <h1 className="font-display text-3xl font-bold">Image Generation</h1>
             <p className="text-muted-foreground text-sm">Create stunning AI images from text prompts</p>
@@ -230,29 +195,21 @@ function ImageToolPage() {
                   <Label>Prompt</Label>
                   <span className="text-xs text-muted-foreground">{prompt.length}/{MAX_PROMPT_LENGTH}</span>
                 </div>
-                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe your image... e.g., 'A serene mountain lake at sunset, golden hour lighting, photorealistic'" rows={4} className="mt-1 bg-muted/50 border-border resize-none" disabled={generating} maxLength={MAX_PROMPT_LENGTH} />
+                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe your image... e.g., 'A serene mountain lake at sunset, golden hour lighting'" rows={4} className="mt-1 bg-muted/50 border-border resize-none" disabled={isGenerating} maxLength={MAX_PROMPT_LENGTH} />
               </div>
-
-              <div className="grid md:grid-cols-3 gap-4">
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <Label>Image Size</Label>
-                  <Select value={imageSize} onValueChange={setImageSize} disabled={generating}>
+                  <Select value={selectedSize} onValueChange={setSelectedSize} disabled={isGenerating}>
                     <SelectTrigger className="mt-1 bg-muted/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>{IMAGE_SIZES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label>Style</Label>
-                  <Select value={style} onValueChange={setStyle} disabled={generating}>
+                  <Select value={selectedStyle} onValueChange={setSelectedStyle} disabled={isGenerating}>
                     <SelectTrigger className="mt-1 bg-muted/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>{STYLES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Number of Images</Label>
-                  <Select value={numImages.toString()} onValueChange={(v) => setNumImages(parseInt(v))} disabled={generating}>
-                    <SelectTrigger className="mt-1 bg-muted/50 border-border"><SelectValue /></SelectTrigger>
-                    <SelectContent>{[1, 2, 3, 4].map((n) => <SelectItem key={n} value={n.toString()}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
@@ -264,12 +221,11 @@ function ImageToolPage() {
                   <Label>Prompt</Label>
                   <span className="text-xs text-muted-foreground">{prompt.length}/{MAX_PROMPT_LENGTH}</span>
                 </div>
-                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe your image. The reference image will guide the AI style and composition." rows={4} className="mt-1 bg-muted/50 border-border resize-none" disabled={generating} maxLength={MAX_PROMPT_LENGTH} />
+                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe your image. The reference will guide AI style and composition." rows={4} className="mt-1 bg-muted/50 border-border resize-none" disabled={isGenerating} maxLength={MAX_PROMPT_LENGTH} />
               </div>
-
               <div>
-                <Label>Reference Image (1)</Label>
-                <p className="text-xs text-muted-foreground mb-2">This image guides the AI style and composition</p>
+                <Label>Reference Images (up to 10)</Label>
+                <p className="text-xs text-muted-foreground mb-2">These images guide the AI style and composition</p>
                 <div className="p-4 border-2 border-dashed border-border rounded-lg bg-muted/30">
                   <div className="flex flex-wrap gap-3 mb-4">
                     {referenceImages.map((img, idx) => (
@@ -279,56 +235,74 @@ function ImageToolPage() {
                       </div>
                     ))}
                   </div>
-                  {referenceImages.length < 1 && (
+                  {referenceImages.length < 10 && (
                     <div className="flex flex-wrap gap-3">
                       <label className="flex items-center gap-2 px-4 py-2 bg-muted hover:bg-muted/80 rounded-lg cursor-pointer transition">
                         <Upload className="size-4" /><span className="text-sm">Upload File</span>
-                        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileUpload} className="hidden" disabled={generating} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileUpload} className="hidden" disabled={isGenerating} />
                       </label>
                       <div className="flex items-center gap-2">
-                        <Input type="url" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="Paste image URL..." className="bg-muted/50 border-border w-48" disabled={generating} />
-                        <Button type="button" variant="outline" size="sm" onClick={addUrl} disabled={generating || !urlInput.trim()}><Plus className="size-4" /></Button>
+                        <Input type="url" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="Paste image URL..." className="bg-muted/50 border-border w-48" disabled={isGenerating} />
+                        <Button type="button" variant="outline" size="sm" onClick={addUrl} disabled={isGenerating || !urlInput.trim()}><Plus className="size-4" /></Button>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
-
-              <div className="grid md:grid-cols-3 gap-4">
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <Label>Image Size</Label>
-                  <Select value={imageSize} onValueChange={setImageSize} disabled={generating}>
+                  <Select value={selectedSize} onValueChange={setSelectedSize} disabled={isGenerating}>
                     <SelectTrigger className="mt-1 bg-muted/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>{IMAGE_SIZES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label>Style</Label>
-                  <Select value={style} onValueChange={setStyle} disabled={generating}>
+                  <Select value={selectedStyle} onValueChange={setSelectedStyle} disabled={isGenerating}>
                     <SelectTrigger className="mt-1 bg-muted/50 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>{STYLES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Number of Images</Label>
-                  <Select value={numImages.toString()} onValueChange={(v) => setNumImages(parseInt(v))} disabled={generating}>
-                    <SelectTrigger className="mt-1 bg-muted/50 border-border"><SelectValue /></SelectTrigger>
-                    <SelectContent>{[1, 2, 3, 4].map((n) => <SelectItem key={n} value={n.toString()}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
             </TabsContent>
           </Tabs>
 
-          <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-muted-foreground mt-4">
-            <ImageIcon className="size-4 text-amber-500" />
-            <span>Image generation takes ~20-60 seconds. Hang tight!</span>
-          </div>
+          {isGenerating && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Generating... (20-60s)</span>
+              </div>
+              <Progress value={undefined} className="h-2" />
+            </div>
+          )}
 
-          <Button onClick={handleGenerate} disabled={generating || !prompt.trim()} className="mt-6 btn-gradient text-white border-0">
-            {generating ? <><Loader2 className="size-4 mr-2 animate-spin" /> Generating your image...</> : <><Sparkles className="size-4 mr-2" /> Generate ({CREDITS_PER_IMAGE * numImages} credits)</>}
+          <Button onClick={handleGenerate} disabled={isGenerating || !prompt.trim()} className="mt-6 btn-gradient text-white border-0">
+            {isGenerating ? <><Loader2 className="size-4 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="size-4 mr-2" /> Generate ({CREDITS_PER_IMAGE} credits)</>}
           </Button>
         </Card>
+
+        {generatedImages.length > 0 && (
+          <div className="mt-10">
+            <h2 className="font-display text-xl font-semibold">Generated Images</h2>
+            <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 mt-4">
+              {generatedImages.map((url, idx) => (
+                <Card key={idx} className="glass border-0 overflow-hidden break-inside-avoid group">
+                  <div className="relative bg-muted">
+                    <img src={url} alt="Generated" className="w-full cursor-zoom-in" loading="lazy" onClick={() => setLightboxImage(url)} />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+                      <Button size="sm" variant="secondary" onClick={() => setLightboxImage(url)}><ZoomIn className="size-4" /></Button>
+                      <Button size="sm" variant="secondary" asChild>
+                        <a href={url} download target="_blank" rel="noopener noreferrer"><Download className="size-4" /></a>
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-10">
           <h2 className="font-display text-xl font-semibold">Your Generations</h2>
@@ -353,7 +327,7 @@ function ImageToolPage() {
                       <div className="flex flex-col items-center justify-center py-16"><ImageIcon className="size-12 text-muted-foreground opacity-50" /></div>
                     )}
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
-                      <Button size="sm" variant="secondary" onClick={() => copyPrompt(gen)}><Copy className="size-4" /></Button>
+                      <Button size="sm" variant="secondary" onClick={() => { setPrompt(gen.prompt); if (gen.settings?.style) setSelectedStyle(gen.settings.style as string); if (gen.settings?.image_size) setSelectedSize(gen.settings.image_size as string); toast.success("Prompt copied"); }}><Copy className="size-4" /></Button>
                       {gen.result_url && <Button size="sm" variant="secondary" onClick={() => setLightboxImage(gen.result_url)}><ZoomIn className="size-4" /></Button>}
                       {gen.result_url && (
                         <Button size="sm" variant="secondary" asChild>
