@@ -8,7 +8,8 @@ Deno.serve(async (req) => {
   try {
     const FAL_API_KEY = Deno.env.get("FAL_API_KEY");
     if (!FAL_API_KEY) throw new Error("FAL_API_KEY missing");
-    const { prompt, image_size, style, num_images, reference_images } = await req.json();
+    const body = await req.json();
+    const { prompt, image_size, style, num_images, reference_images } = body;
     if (!prompt) throw new Error("Prompt required");
     const STYLES: Record<string, string> = {
       realistic: "photorealistic, high quality",
@@ -22,10 +23,10 @@ Deno.serve(async (req) => {
     const finalPrompt = style && STYLES[style] ? `${prompt}, ${STYLES[style]}` : prompt;
     const hasRef = reference_images && reference_images.length > 0;
     let modelId: string;
-    let body: Record<string, unknown>;
+    let falBody: Record<string, unknown>;
     if (hasRef) {
       modelId = "fal-ai/bytedance/seedream/v4.5/edit";
-      body = {
+      falBody = {
         prompt: finalPrompt,
         image_size: image_size || "auto_4K",
         num_images: num_images || 1,
@@ -35,7 +36,7 @@ Deno.serve(async (req) => {
       };
     } else {
       modelId = "fal-ai/bytedance/seedream/v4.5/text-to-image";
-      body = {
+      falBody = {
         prompt: finalPrompt,
         image_size: image_size || "auto_2K",
         num_images: num_images || 1,
@@ -44,35 +45,33 @@ Deno.serve(async (req) => {
         seed: Math.floor(Math.random() * 999999),
       };
     }
+    console.log("Submitting to:", modelId);
+    console.log("Body:", JSON.stringify(falBody));
     const submitRes = await fetch(`https://queue.fal.run/${modelId}`, {
       method: "POST",
-      headers: { "Authorization": `Key ${FAL_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      headers: {
+        "Authorization": `Key ${FAL_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(falBody),
     });
-    if (!submitRes.ok) throw new Error(`Submit failed: ${await submitRes.text()}`);
-    const { request_id } = await submitRes.json();
-    for (let i = 0; i < 20; i++) {
-      await new Promise(r => setTimeout(r, 3000));
-      const statusRes = await fetch(`https://queue.fal.run/${modelId}/requests/${request_id}/status`, {
-        headers: { "Authorization": `Key ${FAL_API_KEY}` },
-      });
-      const { status } = await statusRes.json();
-      if (status === "COMPLETED") {
-        const resultRes = await fetch(`https://queue.fal.run/${modelId}/requests/${request_id}`, {
-          headers: { "Authorization": `Key ${FAL_API_KEY}` },
-        });
-        const result = await resultRes.json();
-        const image_urls = result.images?.map((img: { url: string }) => img.url) || [];
-        return new Response(JSON.stringify({ success: true, image_urls }), {
-          headers: { ...cors, "Content-Type": "application/json" },
-        });
-      }
-      if (status === "FAILED") throw new Error("Generation failed on Fal.ai");
-    }
-    throw new Error("Timeout after 60 seconds");
+    const submitText = await submitRes.text();
+    console.log("Submit response:", submitRes.status, submitText);
+    if (!submitRes.ok) throw new Error(`Fal.ai submit error: ${submitRes.status} - ${submitText}`);
+    const submitData = JSON.parse(submitText);
+    return new Response(JSON.stringify({
+      success: true,
+      request_id: submitData.request_id,
+      model_id: modelId,
+      status: "queued",
+    }), {
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
   } catch (err) {
+    console.error("generate-image error:", String(err));
     return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500, headers: { ...cors, "Content-Type": "application/json" },
+      status: 500,
+      headers: { ...cors, "Content-Type": "application/json" },
     });
   }
 });

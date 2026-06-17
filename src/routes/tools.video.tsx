@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Video, Loader as Loader2, Download, Heart, Trash2, Sparkles, X, Upload, Clock, Image as ImageIcon, Music, CircleAlert as AlertCircle, ArrowLeft } from "lucide-react";
+import { Video, Loader as Loader2, Download, Heart, Trash2, Sparkles, X, Image as ImageIcon, Music, CircleAlert as AlertCircle, ArrowLeft, Clock } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/tools/video")({
@@ -56,6 +56,14 @@ function VideoToolPage() {
   const [referenceAudioUrls, setReferenceAudioUrls] = useState<string[]>([]);
   const [generations, setGenerations] = useState<Generation[]>([]);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    // Clear stale generation state on mount - never auto-resume
+    setIsGenerating(false);
+    setVideoUrl(null);
+    setPollProgress(0);
+    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+  }, []);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
