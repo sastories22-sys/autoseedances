@@ -183,7 +183,7 @@ function PricingPage() {
                       Current plan
                     </Button>
                   ) : plan.id === "free" ? (
-                    <Link to="/auth" className="block">
+                    <Link to="/signup" className="block">
                       <Button className="w-full" variant="outline">
                         Get started <ArrowRight className="ml-1 size-4" />
                       </Button>

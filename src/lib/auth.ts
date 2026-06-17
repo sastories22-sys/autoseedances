@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 const DEFAULT_AUTH_REDIRECT = "/dashboard";
-const VALID_AUTH_REDIRECT_PREFIXES = ["/dashboard", "/workspace"];
+const VALID_AUTH_REDIRECT_PREFIXES = ["/dashboard", "/tools"];
 const bootstrapInFlight = new Map<string, Promise<void>>();
 
 export function getSafeAuthRedirect(value: unknown, fallback = DEFAULT_AUTH_REDIRECT) {

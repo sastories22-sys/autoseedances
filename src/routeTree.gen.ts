@@ -9,7 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -17,7 +16,6 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as ExtensionRouteImport } from './routes/extension'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AuthRouteImport } from './routes/auth'
@@ -28,22 +26,14 @@ import { Route as AuthIndexRouteImport } from './routes/auth.index'
 import { Route as ToolsVideoRouteImport } from './routes/tools.video'
 import { Route as ToolsImageRouteImport } from './routes/tools.image'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
-import { Route as DashboardQueueRouteImport } from './routes/dashboard.queue'
 import { Route as DashboardProfileRouteImport } from './routes/dashboard.profile'
-import { Route as DashboardLibraryRouteImport } from './routes/dashboard.library'
 import { Route as DashboardHistoryRouteImport } from './routes/dashboard.history'
-import { Route as DashboardExtensionRouteImport } from './routes/dashboard.extension'
 import { Route as DashboardCreditsRouteImport } from './routes/dashboard.credits'
 import { Route as DashboardBillingRouteImport } from './routes/dashboard.billing'
 import { Route as DashboardAdminRouteImport } from './routes/dashboard.admin'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 
-const WorkspaceRoute = WorkspaceRouteImport.update({
-  id: '/workspace',
-  path: '/workspace',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
@@ -77,11 +67,6 @@ const LoginRoute = LoginRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ExtensionRoute = ExtensionRouteImport.update({
-  id: '/extension',
-  path: '/extension',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -134,29 +119,14 @@ const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => DashboardRoute,
 } as any)
-const DashboardQueueRoute = DashboardQueueRouteImport.update({
-  id: '/queue',
-  path: '/queue',
-  getParentRoute: () => DashboardRoute,
-} as any)
 const DashboardProfileRoute = DashboardProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
   getParentRoute: () => DashboardRoute,
 } as any)
-const DashboardLibraryRoute = DashboardLibraryRouteImport.update({
-  id: '/library',
-  path: '/library',
-  getParentRoute: () => DashboardRoute,
-} as any)
 const DashboardHistoryRoute = DashboardHistoryRouteImport.update({
   id: '/history',
   path: '/history',
-  getParentRoute: () => DashboardRoute,
-} as any)
-const DashboardExtensionRoute = DashboardExtensionRouteImport.update({
-  id: '/extension',
-  path: '/extension',
   getParentRoute: () => DashboardRoute,
 } as any)
 const DashboardCreditsRoute = DashboardCreditsRouteImport.update({
@@ -190,7 +160,6 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRouteWithChildren
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRouteWithChildren
-  '/extension': typeof ExtensionRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
@@ -198,17 +167,13 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
-  '/workspace': typeof WorkspaceRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/dashboard/admin': typeof DashboardAdminRoute
   '/dashboard/billing': typeof DashboardBillingRoute
   '/dashboard/credits': typeof DashboardCreditsRoute
-  '/dashboard/extension': typeof DashboardExtensionRoute
   '/dashboard/history': typeof DashboardHistoryRoute
-  '/dashboard/library': typeof DashboardLibraryRoute
   '/dashboard/profile': typeof DashboardProfileRoute
-  '/dashboard/queue': typeof DashboardQueueRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/tools/image': typeof ToolsImageRoute
   '/tools/video': typeof ToolsVideoRoute
@@ -219,7 +184,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/contact': typeof ContactRoute
-  '/extension': typeof ExtensionRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
@@ -227,17 +191,13 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
-  '/workspace': typeof WorkspaceRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/dashboard/admin': typeof DashboardAdminRoute
   '/dashboard/billing': typeof DashboardBillingRoute
   '/dashboard/credits': typeof DashboardCreditsRoute
-  '/dashboard/extension': typeof DashboardExtensionRoute
   '/dashboard/history': typeof DashboardHistoryRoute
-  '/dashboard/library': typeof DashboardLibraryRoute
   '/dashboard/profile': typeof DashboardProfileRoute
-  '/dashboard/queue': typeof DashboardQueueRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/tools/image': typeof ToolsImageRoute
   '/tools/video': typeof ToolsVideoRoute
@@ -251,7 +211,6 @@ export interface FileRoutesById {
   '/auth': typeof AuthRouteWithChildren
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRouteWithChildren
-  '/extension': typeof ExtensionRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/pricing': typeof PricingRoute
@@ -259,17 +218,13 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
-  '/workspace': typeof WorkspaceRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/dashboard/admin': typeof DashboardAdminRoute
   '/dashboard/billing': typeof DashboardBillingRoute
   '/dashboard/credits': typeof DashboardCreditsRoute
-  '/dashboard/extension': typeof DashboardExtensionRoute
   '/dashboard/history': typeof DashboardHistoryRoute
-  '/dashboard/library': typeof DashboardLibraryRoute
   '/dashboard/profile': typeof DashboardProfileRoute
-  '/dashboard/queue': typeof DashboardQueueRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/tools/image': typeof ToolsImageRoute
   '/tools/video': typeof ToolsVideoRoute
@@ -284,7 +239,6 @@ export interface FileRouteTypes {
     | '/auth'
     | '/contact'
     | '/dashboard'
-    | '/extension'
     | '/forgot-password'
     | '/login'
     | '/pricing'
@@ -292,17 +246,13 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/terms'
-    | '/workspace'
     | '/auth/callback'
     | '/blog/$slug'
     | '/dashboard/admin'
     | '/dashboard/billing'
     | '/dashboard/credits'
-    | '/dashboard/extension'
     | '/dashboard/history'
-    | '/dashboard/library'
     | '/dashboard/profile'
-    | '/dashboard/queue'
     | '/dashboard/settings'
     | '/tools/image'
     | '/tools/video'
@@ -313,7 +263,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/contact'
-    | '/extension'
     | '/forgot-password'
     | '/login'
     | '/pricing'
@@ -321,17 +270,13 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/terms'
-    | '/workspace'
     | '/auth/callback'
     | '/blog/$slug'
     | '/dashboard/admin'
     | '/dashboard/billing'
     | '/dashboard/credits'
-    | '/dashboard/extension'
     | '/dashboard/history'
-    | '/dashboard/library'
     | '/dashboard/profile'
-    | '/dashboard/queue'
     | '/dashboard/settings'
     | '/tools/image'
     | '/tools/video'
@@ -344,7 +289,6 @@ export interface FileRouteTypes {
     | '/auth'
     | '/contact'
     | '/dashboard'
-    | '/extension'
     | '/forgot-password'
     | '/login'
     | '/pricing'
@@ -352,17 +296,13 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/terms'
-    | '/workspace'
     | '/auth/callback'
     | '/blog/$slug'
     | '/dashboard/admin'
     | '/dashboard/billing'
     | '/dashboard/credits'
-    | '/dashboard/extension'
     | '/dashboard/history'
-    | '/dashboard/library'
     | '/dashboard/profile'
-    | '/dashboard/queue'
     | '/dashboard/settings'
     | '/tools/image'
     | '/tools/video'
@@ -376,7 +316,6 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRouteWithChildren
   ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRouteWithChildren
-  ExtensionRoute: typeof ExtensionRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   PricingRoute: typeof PricingRoute
@@ -384,7 +323,6 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   TermsRoute: typeof TermsRoute
-  WorkspaceRoute: typeof WorkspaceRoute
   BlogSlugRoute: typeof BlogSlugRoute
   ToolsImageRoute: typeof ToolsImageRoute
   ToolsVideoRoute: typeof ToolsVideoRoute
@@ -393,13 +331,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/workspace': {
-      id: '/workspace'
-      path: '/workspace'
-      fullPath: '/workspace'
-      preLoaderRoute: typeof WorkspaceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -447,13 +378,6 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/extension': {
-      id: '/extension'
-      path: '/extension'
-      fullPath: '/extension'
-      preLoaderRoute: typeof ExtensionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -526,13 +450,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsRouteImport
       parentRoute: typeof DashboardRoute
     }
-    '/dashboard/queue': {
-      id: '/dashboard/queue'
-      path: '/queue'
-      fullPath: '/dashboard/queue'
-      preLoaderRoute: typeof DashboardQueueRouteImport
-      parentRoute: typeof DashboardRoute
-    }
     '/dashboard/profile': {
       id: '/dashboard/profile'
       path: '/profile'
@@ -540,25 +457,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardProfileRouteImport
       parentRoute: typeof DashboardRoute
     }
-    '/dashboard/library': {
-      id: '/dashboard/library'
-      path: '/library'
-      fullPath: '/dashboard/library'
-      preLoaderRoute: typeof DashboardLibraryRouteImport
-      parentRoute: typeof DashboardRoute
-    }
     '/dashboard/history': {
       id: '/dashboard/history'
       path: '/history'
       fullPath: '/dashboard/history'
       preLoaderRoute: typeof DashboardHistoryRouteImport
-      parentRoute: typeof DashboardRoute
-    }
-    '/dashboard/extension': {
-      id: '/dashboard/extension'
-      path: '/extension'
-      fullPath: '/dashboard/extension'
-      preLoaderRoute: typeof DashboardExtensionRouteImport
       parentRoute: typeof DashboardRoute
     }
     '/dashboard/credits': {
@@ -615,11 +518,8 @@ interface DashboardRouteChildren {
   DashboardAdminRoute: typeof DashboardAdminRoute
   DashboardBillingRoute: typeof DashboardBillingRoute
   DashboardCreditsRoute: typeof DashboardCreditsRoute
-  DashboardExtensionRoute: typeof DashboardExtensionRoute
   DashboardHistoryRoute: typeof DashboardHistoryRoute
-  DashboardLibraryRoute: typeof DashboardLibraryRoute
   DashboardProfileRoute: typeof DashboardProfileRoute
-  DashboardQueueRoute: typeof DashboardQueueRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
@@ -628,11 +528,8 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardAdminRoute: DashboardAdminRoute,
   DashboardBillingRoute: DashboardBillingRoute,
   DashboardCreditsRoute: DashboardCreditsRoute,
-  DashboardExtensionRoute: DashboardExtensionRoute,
   DashboardHistoryRoute: DashboardHistoryRoute,
-  DashboardLibraryRoute: DashboardLibraryRoute,
   DashboardProfileRoute: DashboardProfileRoute,
-  DashboardQueueRoute: DashboardQueueRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
@@ -646,7 +543,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRouteWithChildren,
   ContactRoute: ContactRoute,
   DashboardRoute: DashboardRouteWithChildren,
-  ExtensionRoute: ExtensionRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   PricingRoute: PricingRoute,
@@ -654,7 +550,6 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   TermsRoute: TermsRoute,
-  WorkspaceRoute: WorkspaceRoute,
   BlogSlugRoute: BlogSlugRoute,
   ToolsImageRoute: ToolsImageRoute,
   ToolsVideoRoute: ToolsVideoRoute,

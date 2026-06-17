@@ -7,17 +7,6 @@ const corsHeaders = {
 };
 
 const FAL_API_KEY = Deno.env.get("FAL_API_KEY")!;
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-interface FalStatusResponse {
-  status: string;
-  result?: {
-    images?: Array<{ url: string }>;
-    video?: { url: string };
-  };
-  error?: string;
-}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -33,20 +22,22 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { generation_id, fal_request_id } = body;
+    const { request_id, model_type } = body;
 
-    if (!fal_request_id) {
-      return new Response(JSON.stringify({ error: "fal_request_id is required" }), {
+    if (!request_id) {
+      return new Response(JSON.stringify({ error: "request_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Check Fal.ai status
-    const response = await fetch(`https://queue.fal.run/fal-ai/requests/${fal_request_id}`, {
-      headers: {
-        "Authorization": `Key ${FAL_API_KEY}`,
-      },
+    const isReference = model_type === "reference-to-video";
+    const modelPath = isReference
+      ? "fal-ai/bytedance/seedance-2.0/reference-to-video"
+      : "fal-ai/bytedance/seedance-2.0/text-to-video";
+
+    const response = await fetch(`https://queue.fal.run/${modelPath}/requests/${request_id}`, {
+      headers: { "Authorization": `Key ${FAL_API_KEY}` },
     });
 
     if (!response.ok) {
@@ -55,84 +46,22 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Failed to check status: ${response.status}`);
     }
 
-    const result: FalStatusResponse = await response.json();
+    const result = await response.json();
 
-    if (result.status === "completed" && result.result) {
-      let resultUrl: string | null = null;
-
-      // Handle image result
-      if (result.result.images && result.result.images.length > 0) {
-        resultUrl = result.result.images[0].url;
-      }
-      // Handle video result
-      if (result.result.video?.url) {
-        resultUrl = result.result.video.url;
-      }
-
-      if (resultUrl && generation_id) {
-        // Update generation in database
-        const updateResponse = await fetch(`${SUPABASE_URL}/rest/v1/generations?id=eq.${generation_id}`, {
-          method: "PATCH",
-          headers: {
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
-            "Content-Type": "application/json",
-            "Prefer": "return=minimal",
-          },
-          body: JSON.stringify({
-            result_url: resultUrl,
-            thumbnail_url: resultUrl,
-            status: "done",
-            updated_at: new Date().toISOString(),
-          }),
-        });
-
-        if (!updateResponse.ok) {
-          console.error("Failed to update generation:", await updateResponse.text());
-        }
-      }
-
-      return new Response(JSON.stringify({
-        status: "done",
-        result_url: resultUrl,
-        images: result.result.images?.map((i) => i.url),
-        video: result.result.video?.url,
-      }), {
+    if (result.status === "COMPLETED") {
+      const videoUrl = result.output?.video?.url ?? result.output?.video_url ?? null;
+      return new Response(JSON.stringify({ status: "completed", video_url: videoUrl }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (result.status === "failed" || result.error) {
-      // Update generation to failed
-      if (generation_id) {
-        await fetch(`${SUPABASE_URL}/rest/v1/generations?id=eq.${generation_id}`, {
-          method: "PATCH",
-          headers: {
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
-            "Content-Type": "application/json",
-            "Prefer": "return=minimal",
-          },
-          body: JSON.stringify({
-            status: "failed",
-            error: result.error || "Generation failed",
-            updated_at: new Date().toISOString(),
-          }),
-        });
-      }
-
-      return new Response(JSON.stringify({
-        status: "failed",
-        error: result.error || "Generation failed",
-      }), {
+    if (result.status === "FAILED" || result.error) {
+      return new Response(JSON.stringify({ status: "failed", error: result.error || "Generation failed" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Still processing
-    return new Response(JSON.stringify({
-      status: result.status,
-    }), {
+    return new Response(JSON.stringify({ status: result.status || "processing" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

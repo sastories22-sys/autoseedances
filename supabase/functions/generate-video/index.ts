@@ -7,18 +7,6 @@ const corsHeaders = {
 };
 
 const FAL_API_KEY = Deno.env.get("FAL_API_KEY")!;
-const FAL_VIDEO_URL = "https://queue.fal.run/fal-ai/minimax/video-01";
-
-interface FalResponse {
-  request_id: string;
-  status: string;
-  result?: {
-    video?: {
-      url: string;
-    };
-  };
-  error?: string;
-}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -40,13 +28,12 @@ Deno.serve(async (req: Request) => {
       resolution,
       aspect_ratio,
       generate_audio,
+      model_type,
       first_frame_url,
       last_frame_url,
       reference_images,
       reference_videos,
       reference_audios,
-      user_id,
-      generation_id,
     } = body;
 
     if (!prompt || typeof prompt !== "string") {
@@ -56,7 +43,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Build request body for Fal.ai
+    const isReference = model_type === "reference-to-video";
+    const modelPath = isReference
+      ? "fal-ai/bytedance/seedance-2.0/reference-to-video"
+      : "fal-ai/bytedance/seedance-2.0/text-to-video";
+
     const falInput: Record<string, unknown> = {
       prompt: prompt.trim(),
       duration: duration || 5,
@@ -66,25 +57,15 @@ Deno.serve(async (req: Request) => {
       seed: Math.floor(Math.random() * 1000000),
     };
 
-    // Add optional reference inputs
-    if (first_frame_url) {
-      falInput.image = first_frame_url;
-    }
-    if (last_frame_url && first_frame_url) {
-      falInput.last_frame_image = last_frame_url;
-    }
-    if (reference_images && reference_images.length > 0) {
-      falInput.reference_images = reference_images.slice(0, 9);
-    }
-    if (reference_videos && reference_videos.length > 0) {
-      falInput.reference_videos = reference_videos.slice(0, 3);
-    }
-    if (reference_audios && reference_audios.length > 0) {
-      falInput.reference_audios = reference_audios.slice(0, 3);
+    if (isReference) {
+      if (first_frame_url) falInput.first_frame_url = first_frame_url;
+      if (last_frame_url && first_frame_url) falInput.last_frame_url = last_frame_url;
+      if (reference_images?.length > 0) falInput.reference_images = reference_images.slice(0, 9);
+      if (reference_videos?.length > 0) falInput.reference_videos = reference_videos.slice(0, 3);
+      if (reference_audios?.length > 0) falInput.reference_audios = reference_audios.slice(0, 3);
     }
 
-    // Submit to Fal.ai queue
-    const response = await fetch(FAL_VIDEO_URL, {
+    const response = await fetch(`https://queue.fal.run/${modelPath}`, {
       method: "POST",
       headers: {
         "Authorization": `Key ${FAL_API_KEY}`,
@@ -96,15 +77,15 @@ Deno.serve(async (req: Request) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Fal.ai API error:", errorText);
-      throw new Error(`Fal.ai API error: ${response.status}`);
+      throw new Error(`Fal.ai API error: ${response.status} ${errorText}`);
     }
 
-    const result: FalResponse = await response.json();
+    const result = await response.json();
 
-    // Return request_id for polling (video generation takes 2-3 minutes)
     return new Response(JSON.stringify({
       success: true,
-      prediction_id: result.request_id,
+      request_id: result.request_id,
+      model_type: isReference ? "reference-to-video" : "text-to-video",
       status: result.status || "queued",
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

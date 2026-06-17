@@ -2,20 +2,16 @@ import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-route
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureUserBootstrap, signOut, useSession } from "@/lib/auth";
-import { LayoutDashboard, ListChecks, Film, Chromium as Chrome, Settings, Shield, Sparkles, LogOut, Loader as Loader2, CreditCard, Play, User, Coins, Image as ImageIcon, Video, History, Zap } from "lucide-react";
+import { LayoutDashboard, Settings, Shield, Sparkles, LogOut, Loader as Loader2, CreditCard, User, Coins, Image as ImageIcon, Video, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Tables } from "@/integrations/supabase/types";
 
 const items = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { to: "/tools/image", label: "Image AI", icon: ImageIcon },
-  { to: "/tools/video", label: "Video AI", icon: Video },
+  { to: "/tools/image", label: "Image Generation", icon: ImageIcon },
+  { to: "/tools/video", label: "Video Generation", icon: Video },
   { to: "/dashboard/credits", label: "Credits", icon: Coins },
   { to: "/dashboard/history", label: "History", icon: History },
-  { to: "/workspace", label: "Workspace", icon: Play },
-  { to: "/dashboard/queue", label: "Queue", icon: ListChecks },
-  { to: "/dashboard/library", label: "Library", icon: Film },
-  { to: "/dashboard/extension", label: "Extension", icon: Chrome },
   { to: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { to: "/dashboard/profile", label: "Profile", icon: User },
   { to: "/dashboard/settings", label: "Settings", icon: Settings },
@@ -30,7 +26,7 @@ export function DashboardLayout() {
   const redirectPath = path.startsWith("/dashboard") || path.startsWith("/tools") ? path : "/dashboard";
 
   useEffect(() => {
-    if (!loading && !session) navigate({ to: "/auth", search: { redirect: redirectPath } as any, replace: true });
+    if (!loading && !session) navigate({ to: "/login", search: { redirect: redirectPath } as any, replace: true });
   }, [loading, session, navigate, redirectPath]);
 
   useEffect(() => {
@@ -39,11 +35,9 @@ export function DashboardLayout() {
     supabase.from("user_roles").select("role").eq("user_id", session.user.id).eq("role", "admin").maybeSingle()
       .then(({ data }) => setIsAdmin(!!data));
 
-    // Fetch wallet
     supabase.from("credit_wallets").select("*").eq("user_id", session.user.id).maybeSingle()
       .then(({ data }) => setWallet(data));
 
-    // Subscribe to wallet changes
     const channel = supabase.channel("wallet-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "credit_wallets", filter: `user_id=eq.${session.user.id}` }, (payload) => {
         if (payload.new) setWallet(payload.new as Tables<"credit_wallets">);
@@ -57,7 +51,7 @@ export function DashboardLayout() {
     return <div className="min-h-screen grid place-items-center"><Loader2 className="animate-spin text-primary" /></div>;
   }
 
-  const allItems = isAdmin ? [...items, { to: "/dashboard/admin", label: "Admin", icon: Shield }] : items;
+  const allItems = isAdmin ? [...items, { to: "/dashboard/admin", label: "Admin Panel", icon: Shield }] : items;
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -69,7 +63,6 @@ export function DashboardLayout() {
           <span className="gradient-text">Auto Seedance</span>
         </Link>
 
-        {/* Credit balance */}
         {wallet && (
           <div className="mx-3 mb-3 rounded-xl border border-border bg-muted/30 p-4">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">

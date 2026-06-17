@@ -13,15 +13,15 @@ export function Footer() {
             <span className="gradient-text">Auto Seedance</span>
           </div>
           <p className="mt-3 text-sm text-muted-foreground max-w-xs">
-            Bulk AI Images &amp; Videos Generator Automation. Automate Dreamina image &amp; video generation workflows directly from your browser.
+            Professional AI image and video generation platform powered by advanced models.
           </p>
         </div>
         <div className="text-sm">
           <h4 className="font-semibold mb-3">Product</h4>
           <ul className="space-y-2 text-muted-foreground">
-            <li><Link to="/extension" className="hover:text-foreground">Extension</Link></li>
+            <li><Link to="/tools/image" className="hover:text-foreground">Image Generation</Link></li>
+            <li><Link to="/tools/video" className="hover:text-foreground">Video Generation</Link></li>
             <li><Link to="/pricing" className="hover:text-foreground">Pricing</Link></li>
-            <li><Link to="/blog" className="hover:text-foreground">Blog</Link></li>
             <li><a href="/#features" className="hover:text-foreground">Features</a></li>
             <li><a href="/#faq" className="hover:text-foreground">FAQ</a></li>
           </ul>
@@ -29,7 +29,8 @@ export function Footer() {
         <div className="text-sm">
           <h4 className="font-semibold mb-3">Account</h4>
           <ul className="space-y-2 text-muted-foreground">
-            <li><Link to="/auth" className="hover:text-foreground">Sign in</Link></li>
+            <li><Link to="/login" className="hover:text-foreground">Sign in</Link></li>
+            <li><Link to="/signup" className="hover:text-foreground">Sign up</Link></li>
             <li><Link to="/dashboard" className="hover:text-foreground">Dashboard</Link></li>
             <li><Link to="/contact" className="hover:text-foreground">Contact</Link></li>
           </ul>
@@ -46,24 +47,12 @@ export function Footer() {
       <div className="border-t border-border">
         <div className="mx-auto max-w-7xl px-4 py-8">
           <h4 className="text-xs uppercase tracking-widest text-muted-foreground">
-            AI Model Infrastructure Partners
+            AI Model Infrastructure
           </h4>
           <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
-            Auto Seedance automates workflows on top of leading third-party AI
-            generation platforms. We are not affiliated with these providers;
-            references are listed for transparency.
+            Auto Seedance uses leading AI generation models for professional-quality output.
           </p>
           <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            <li>
-              <a
-                href="https://dreamina.capcut.com/"
-                target="_blank"
-                rel="nofollow noopener noreferrer external"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                Dreamina by CapCut
-              </a>
-            </li>
             <li>
               <a
                 href="https://www.byteplus.com/en/solutions/seedance"
@@ -71,7 +60,7 @@ export function Footer() {
                 rel="nofollow noopener noreferrer external"
                 className="text-muted-foreground hover:text-foreground"
               >
-                BytePlus Seedance 2.0
+                Seedance 2.0
               </a>
             </li>
           </ul>
@@ -79,7 +68,7 @@ export function Footer() {
       </div>
 
       <div className="border-t border-border py-6 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Auto Seedance. Bulk AI automation for creators.
+        &copy; {new Date().getFullYear()} Auto Seedance. AI generation for creators.
       </div>
     </footer>
   );

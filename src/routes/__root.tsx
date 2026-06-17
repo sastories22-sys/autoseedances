@@ -4,7 +4,6 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
-  HeadContent,
 } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -35,14 +34,14 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center glass rounded-2xl p-10">
-        <h1 className="text-xl font-semibold">Something glitched</h1>
+        <h1 className="text-xl font-semibold">Something went wrong</h1>
         <p className="mt-2 text-sm text-muted-foreground">Try again or head back home.</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => { router.invalidate(); reset(); }}
             className="rounded-md btn-gradient px-4 py-2 text-sm font-medium text-white"
           >Try again</button>
-          <a href="/" className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted/50">Go home</a>
+          <Link to="/" className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted/50">Go home</Link>
         </div>
       </div>
     </div>
@@ -50,8 +49,8 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 const SITE_URL = "https://autoseedance.site";
-const SITE_TITLE = "Auto Seedance — Bulk AI Images & Videos Generator Automation";
-const SITE_DESC = "Automate Dreamina image & video generation workflows directly from your browser. Queue hundreds of prompts and run bulk AI generation automatically.";
+const SITE_TITLE = "Auto Seedance — AI Image & Video Generation Platform";
+const SITE_DESC = "Professional AI image and video generation platform powered by advanced models. Create stunning visuals with Seedream and Seedance AI.";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
@@ -61,7 +60,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: SITE_TITLE },
       { name: "description", content: SITE_DESC },
       { name: "author", content: "Auto Seedance" },
-      { name: "keywords", content: "bulk AI image generator, AI video automation, Dreamina automation, AI workflow automation, browser AI automation, AI generation automation, bulk AI prompts, AI image generation workflow" },
+      { name: "keywords", content: "AI image generator, AI video generator, text to image, text to video, Seedream, Seedance" },
       { name: "theme-color", content: "#0a0a14" },
       { property: "og:site_name", content: "Auto Seedance" },
       { property: "og:title", content: SITE_TITLE },
@@ -85,7 +84,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "@type": "SoftwareApplication",
           name: "Auto Seedance",
           applicationCategory: "MultimediaApplication",
-          operatingSystem: "Chrome, Edge, Brave, Arc, Opera",
           description: SITE_DESC,
           offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
           url: SITE_URL,
