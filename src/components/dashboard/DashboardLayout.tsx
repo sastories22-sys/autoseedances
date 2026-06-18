@@ -6,7 +6,7 @@ import { LayoutDashboard, Settings, Shield, Sparkles, LogOut, Loader as Loader2,
 import { Button } from "@/components/ui/button";
 import type { Tables } from "@/integrations/supabase/types";
 
-const items = [
+const NAV_ITEMS = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { to: "/tools/image", label: "Image Generation", icon: ImageIcon },
   { to: "/tools/video", label: "Video Generation", icon: Video },
@@ -17,41 +17,91 @@ const items = [
   { to: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
-export function DashboardLayout() {
+export function DashboardLayout({ children }: { children?: React.ReactNode }) {
   const { session, loading } = useSession();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [wallet, setWallet] = useState<Tables<"credit_wallets"> | null>(null);
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const redirectPath = path.startsWith("/dashboard") || path.startsWith("/tools") ? path : "/dashboard";
+  const redirectPath =
+    path.startsWith("/dashboard") || path.startsWith("/tools") ? path : "/dashboard";
 
+  // Redirect to login if no session
   useEffect(() => {
-    if (!loading && !session) navigate({ to: "/login", search: { redirect: redirectPath } as any, replace: true });
+    if (!loading && !session) {
+      navigate({ to: "/login", search: { redirect: redirectPath } as any, replace: true });
+    }
   }, [loading, session, navigate, redirectPath]);
 
+  // Admin check using supabase.auth.getUser() as requested
+  useEffect(() => {
+    const checkAdmin = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("role", "admin")
+          .single();
+        if (data) setIsAdmin(true);
+      } catch {
+        // not an admin — ignore the error
+      }
+    };
+    checkAdmin();
+  }, [session]);
+
+  // Wallet + bootstrap
   useEffect(() => {
     if (!session) return;
     void ensureUserBootstrap(session.user);
-    supabase.from("user_roles").select("role").eq("user_id", session.user.id).eq("role", "admin").maybeSingle()
-      .then(({ data }) => setIsAdmin(!!data));
 
-    supabase.from("credit_wallets").select("*").eq("user_id", session.user.id).maybeSingle()
-      .then(({ data }) => setWallet(data));
-
-    const channel = supabase.channel("wallet-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "credit_wallets", filter: `user_id=eq.${session.user.id}` }, (payload) => {
-        if (payload.new) setWallet(payload.new as Tables<"credit_wallets">);
+    supabase
+      .from("credit_wallets")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setWallet(data);
       })
+      .catch(() => {});
+
+    const channel = supabase
+      .channel("wallet-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "credit_wallets",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          if (payload.new) setWallet(payload.new as Tables<"credit_wallets">);
+        },
+      )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [session]);
 
   if (loading || !session) {
-    return <div className="min-h-screen grid place-items-center"><Loader2 className="animate-spin text-primary" /></div>;
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Loader2 className="animate-spin text-primary" />
+      </div>
+    );
   }
 
-  const allItems = isAdmin ? [...items, { to: "/dashboard/admin", label: "Admin Panel", icon: Shield }] : items;
+  const allItems = isAdmin
+    ? [...NAV_ITEMS, { to: "/dashboard/admin", label: "Admin Panel", icon: Shield }]
+    : NAV_ITEMS;
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -68,33 +118,55 @@ export function DashboardLayout() {
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Coins className="size-3.5 text-primary" /> Credits
             </div>
-            <div className="mt-2 text-2xl font-display font-bold">{wallet.balance.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">{wallet.monthly_grant.toLocaleString()} / month</div>
+            <div className="mt-2 text-2xl font-display font-bold">
+              {wallet.balance.toLocaleString()}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {wallet.monthly_grant.toLocaleString()} / month
+            </div>
           </div>
         )}
 
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
           {allItems.map((it) => {
-            const active = path === it.to || (it.to !== "/dashboard" && path.startsWith(it.to));
+            const active =
+              path === it.to || (it.to !== "/dashboard" && path.startsWith(it.to));
             return (
-              <Link key={it.to} to={it.to}
+              <Link
+                key={it.to}
+                to={it.to}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${
-                  active ? "btn-gradient text-white" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                }`}>
+                  active
+                    ? "btn-gradient text-white"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                }`}
+              >
                 <it.icon className="size-4" /> {it.label}
               </Link>
             );
           })}
         </nav>
+
         <div className="p-3 border-t border-border">
-          <div className="px-3 py-2 text-xs text-muted-foreground truncate">{session.user.email}</div>
-          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={async () => { await signOut(); navigate({ to: "/", replace: true }); }}>
+          <div className="px-3 py-2 text-xs text-muted-foreground truncate">
+            {session.user.email}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+            onClick={async () => {
+              await signOut();
+              navigate({ to: "/", replace: true });
+            }}
+          >
             <LogOut className="size-4 mr-2" /> Sign out
           </Button>
         </div>
       </aside>
+
       <main className="flex-1 min-w-0">
-        <Outlet />
+        {children ?? <Outlet />}
       </main>
     </div>
   );
