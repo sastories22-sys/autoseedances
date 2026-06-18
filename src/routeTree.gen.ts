@@ -25,6 +25,8 @@ import { Route as BlogIndexRouteImport } from './routes/blog.index'
 import { Route as AuthIndexRouteImport } from './routes/auth.index'
 import { Route as ToolsVideoRouteImport } from './routes/tools.video'
 import { Route as ToolsImageRouteImport } from './routes/tools.image'
+import { Route as PaymentSuccessRouteImport } from './routes/payment.success'
+import { Route as PaymentCancelRouteImport } from './routes/payment.cancel'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
 import { Route as DashboardProfileRouteImport } from './routes/dashboard.profile'
 import { Route as DashboardHistoryRouteImport } from './routes/dashboard.history'
@@ -114,6 +116,16 @@ const ToolsImageRoute = ToolsImageRouteImport.update({
   path: '/tools/image',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PaymentSuccessRoute = PaymentSuccessRouteImport.update({
+  id: '/payment/success',
+  path: '/payment/success',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaymentCancelRoute = PaymentCancelRouteImport.update({
+  id: '/payment/cancel',
+  path: '/payment/cancel',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -175,6 +187,8 @@ export interface FileRoutesByFullPath {
   '/dashboard/history': typeof DashboardHistoryRoute
   '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
+  '/payment/cancel': typeof PaymentCancelRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/tools/image': typeof ToolsImageRoute
   '/tools/video': typeof ToolsVideoRoute
   '/auth/': typeof AuthIndexRoute
@@ -199,6 +213,8 @@ export interface FileRoutesByTo {
   '/dashboard/history': typeof DashboardHistoryRoute
   '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
+  '/payment/cancel': typeof PaymentCancelRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/tools/image': typeof ToolsImageRoute
   '/tools/video': typeof ToolsVideoRoute
   '/auth': typeof AuthIndexRoute
@@ -226,6 +242,8 @@ export interface FileRoutesById {
   '/dashboard/history': typeof DashboardHistoryRoute
   '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
+  '/payment/cancel': typeof PaymentCancelRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/tools/image': typeof ToolsImageRoute
   '/tools/video': typeof ToolsVideoRoute
   '/auth/': typeof AuthIndexRoute
@@ -254,6 +272,8 @@ export interface FileRouteTypes {
     | '/dashboard/history'
     | '/dashboard/profile'
     | '/dashboard/settings'
+    | '/payment/cancel'
+    | '/payment/success'
     | '/tools/image'
     | '/tools/video'
     | '/auth/'
@@ -278,6 +298,8 @@ export interface FileRouteTypes {
     | '/dashboard/history'
     | '/dashboard/profile'
     | '/dashboard/settings'
+    | '/payment/cancel'
+    | '/payment/success'
     | '/tools/image'
     | '/tools/video'
     | '/auth'
@@ -304,6 +326,8 @@ export interface FileRouteTypes {
     | '/dashboard/history'
     | '/dashboard/profile'
     | '/dashboard/settings'
+    | '/payment/cancel'
+    | '/payment/success'
     | '/tools/image'
     | '/tools/video'
     | '/auth/'
@@ -324,6 +348,8 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   TermsRoute: typeof TermsRoute
   BlogSlugRoute: typeof BlogSlugRoute
+  PaymentCancelRoute: typeof PaymentCancelRoute
+  PaymentSuccessRoute: typeof PaymentSuccessRoute
   ToolsImageRoute: typeof ToolsImageRoute
   ToolsVideoRoute: typeof ToolsVideoRoute
   BlogIndexRoute: typeof BlogIndexRoute
@@ -443,6 +469,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ToolsImageRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/payment/success': {
+      id: '/payment/success'
+      path: '/payment/success'
+      fullPath: '/payment/success'
+      preLoaderRoute: typeof PaymentSuccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/payment/cancel': {
+      id: '/payment/cancel'
+      path: '/payment/cancel'
+      fullPath: '/payment/cancel'
+      preLoaderRoute: typeof PaymentCancelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/settings': {
       id: '/dashboard/settings'
       path: '/settings'
@@ -551,6 +591,8 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   TermsRoute: TermsRoute,
   BlogSlugRoute: BlogSlugRoute,
+  PaymentCancelRoute: PaymentCancelRoute,
+  PaymentSuccessRoute: PaymentSuccessRoute,
   ToolsImageRoute: ToolsImageRoute,
   ToolsVideoRoute: ToolsVideoRoute,
   BlogIndexRoute: BlogIndexRoute,

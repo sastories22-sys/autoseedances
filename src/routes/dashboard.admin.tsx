@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/lib/auth";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
@@ -16,370 +16,343 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   Loader as Loader2, Users, CreditCard, Zap, Settings, Mail, Search,
-  Pencil, Send, Image as ImageIcon, Video, DollarSign, RefreshCw,
-  Database, Shield, Globe, Plus, Trash2, Check, X, TrendingUp, Clock,
+  Pencil, Send, Image as ImageIcon, Video, RefreshCw, Database, Shield,
+  Globe, Plus, Trash2, Check, X, Clock,
 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
-export const Route = createFileRoute("/dashboard/admin")({ component: Admin });
+export const Route = createFileRoute("/dashboard/admin")({ component: AdminBoundary });
 
+// ── Error boundary ────────────────────────────────────────────────────────────
+class AdminErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error("Admin panel error:", error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen grid place-items-center p-8">
+          <Card className="glass border-0 p-8 text-center max-w-md">
+            <X className="size-12 mx-auto text-destructive mb-4" />
+            <h2 className="text-xl font-semibold">Admin panel encountered an error</h2>
+            <p className="text-sm text-muted-foreground mt-2 mb-4 font-mono">
+              {(this.state.error as Error).message}
+            </p>
+            <Button onClick={() => this.setState({ error: null })}>Try again</Button>
+          </Card>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function AdminBoundary() {
+  return <AdminErrorBoundary><Admin /></AdminErrorBoundary>;
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 type Profile = Tables<"profiles">;
 type Subscription = Tables<"subscriptions">;
 type Plan = Tables<"plans">;
 type Generation = Tables<"generations">;
 
-interface UserWithSub extends Profile {
-  subscriptions: Subscription | null;
-  email?: string;
-}
-
+interface UserRow extends Profile { sub: Subscription | null; balance: number }
 interface SiteSettings {
-  site_name: string;
-  support_email: string;
-  free_signup_credits: number;
-  max_images_per_day: number;
-  max_videos_per_day: number;
-  maintenance_mode: boolean;
+  site_name: string; support_email: string; free_signup_credits: number;
+  max_images_per_day: number; max_videos_per_day: number; maintenance_mode: boolean;
 }
-
-interface EmailCampaign {
-  id: string;
-  subject: string;
-  recipient_type: string;
-  recipient_count: number;
-  status: string;
-  created_at: string;
-}
+interface Campaign { id: string; subject: string; recipient_type: string; recipient_count: number; status: string; created_at: string }
 
 const EMAIL_TEMPLATES = [
   {
     name: "Welcome Email",
-    subject: "Welcome to Auto Seedance! 🎉",
-    body: `<h2>Welcome to Auto Seedance!</h2>
-<p>We're thrilled to have you on board. You now have access to powerful AI image and video generation tools.</p>
-<p><strong>Getting started:</strong></p>
-<ul>
-  <li>Visit the <a href="https://autoseedance.site/tools/image">Image Generation</a> tool</li>
-  <li>Try the <a href="https://autoseedance.site/tools/video">Video Generation</a> tool</li>
-  <li>Check your <a href="https://autoseedance.site/dashboard/credits">credit balance</a></li>
-</ul>
-<p>Happy creating!</p>`,
+    subject: "Welcome to Auto Seedance!",
+    body: `<h2>Welcome to Auto Seedance!</h2><p>We're thrilled to have you on board. You now have access to powerful AI image and video generation tools.</p><ul><li><a href="https://autoseedance.site/tools/image">Image Generation</a></li><li><a href="https://autoseedance.site/tools/video">Video Generation</a></li></ul><p>Happy creating!</p>`,
   },
   {
-    name: "New Feature Announcement",
-    subject: "New Features Available on Auto Seedance ✨",
-    body: `<h2>Exciting New Features!</h2>
-<p>We've been working hard to bring you new capabilities on Auto Seedance.</p>
-<p>Check out what's new in your dashboard today.</p>`,
+    name: "New Feature",
+    subject: "New Features Available on Auto Seedance",
+    body: `<h2>Exciting New Features!</h2><p>We've been working hard to bring you new capabilities. Check out what's new in your dashboard today.</p>`,
   },
   {
     name: "Special Offer",
-    subject: "Exclusive Offer: Upgrade Your Plan Today 🚀",
-    body: `<h2>Special Offer Just for You!</h2>
-<p>As a valued member, we're offering you an exclusive discount on our paid plans.</p>
-<p>Upgrade today to get more credits and priority generation.</p>`,
+    subject: "Exclusive Offer: Upgrade Your Plan Today",
+    body: `<h2>Special Offer Just for You!</h2><p>As a valued member, we're offering you an exclusive discount on our paid plans. Upgrade today for more credits and priority generation.</p>`,
   },
   {
-    name: "Maintenance Notice",
+    name: "Maintenance",
     subject: "Scheduled Maintenance — Auto Seedance",
-    body: `<h2>Scheduled Maintenance Notice</h2>
-<p>We will be performing scheduled maintenance on our platform. During this time, the service may be temporarily unavailable.</p>
-<p>We apologize for any inconvenience and will notify you when service is restored.</p>`,
+    body: `<h2>Scheduled Maintenance Notice</h2><p>We will be performing scheduled maintenance. The service may be temporarily unavailable. We apologize for any inconvenience.</p>`,
   },
 ];
 
+// ── Main component ────────────────────────────────────────────────────────────
 function Admin() {
   const { user, loading: sessionLoading } = useSession();
   const navigate = useNavigate();
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [status, setStatus] = useState<"loading" | "denied" | "ready">("loading");
+  const [dataLoading, setDataLoading] = useState(true);
+  const [tab, setTab] = useState("overview");
 
-  // Overview stats
-  const [stats, setStats] = useState({
-    users: 0,
-    paid: 0,
-    generationsToday: 0,
-    creditsUsedToday: 0,
-  });
-  const [recentUsers, setRecentUsers] = useState<UserWithSub[]>([]);
-  const [recentGenerations, setRecentGenerations] = useState<Generation[]>([]);
+  // Overview
+  const [stats, setStats] = useState({ users: 0, paid: 0, generationsToday: 0, creditsUsedToday: 0 });
+  const [recentUsers, setRecentUsers] = useState<UserRow[]>([]);
+  const [recentGens, setRecentGens] = useState<Generation[]>([]);
 
   // Users
-  const [users, setUsers] = useState<UserWithSub[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [userSearch, setUserSearch] = useState("");
-  const [userFilter, setUserFilter] = useState<string>("all");
-  const [creditModal, setCreditModal] = useState<{ user: UserWithSub; mode: "add" | "remove" } | null>(null);
+  const [userFilter, setUserFilter] = useState("all");
+  const [creditModal, setCreditModal] = useState<{ row: UserRow; mode: "add" | "remove" } | null>(null);
   const [creditAmount, setCreditAmount] = useState("");
   const [creditReason, setCreditReason] = useState("");
-  const [planModal, setPlanModal] = useState<UserWithSub | null>(null);
-  const [newPlan, setNewPlan] = useState<string>("free");
-  const [wallets, setWallets] = useState<Map<string, number>>(new Map());
+  const [planModal, setPlanModal] = useState<UserRow | null>(null);
+  const [newPlan, setNewPlan] = useState("free");
 
   // Plans
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [editingPlan, setEditingPlan] = useState<Plan & { price_monthly_edit?: number; price_yearly_edit?: number } | null>(null);
-  const [planDialogOpen, setPlanDialogOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<(Plan & { _monthly?: number; _yearly?: number }) | null>(null);
+  const [planDialog, setPlanDialog] = useState(false);
   const [newFeature, setNewFeature] = useState("");
 
   // Campaigns
   const [campaignTo, setCampaignTo] = useState<"all" | "free" | "paid" | "specific">("all");
   const [specificEmail, setSpecificEmail] = useState("");
-  const [campaignSubject, setCampaignSubject] = useState("");
-  const [campaignBody, setCampaignBody] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
-  const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [preview, setPreview] = useState(false);
 
   // Settings
-  const [siteSettings, setSiteSettings] = useState<SiteSettings>({
-    site_name: "Auto Seedance",
-    support_email: "support@autoseedance.site",
-    free_signup_credits: 50,
-    max_images_per_day: 20,
-    max_videos_per_day: 5,
-    maintenance_mode: false,
+  const [settings, setSettings] = useState<SiteSettings>({
+    site_name: "Auto Seedance", support_email: "support@autoseedance.site",
+    free_signup_credits: 50, max_images_per_day: 20, max_videos_per_day: 5, maintenance_mode: false,
   });
   const [savingSettings, setSavingSettings] = useState(false);
 
+  // ── Auth / admin gate ──────────────────────────────────────────────────────
   useEffect(() => {
     if (sessionLoading) return;
     if (!user) { navigate({ to: "/login" }); return; }
     (async () => {
-      const { data } = await supabase.from("user_roles").select("role")
-        .eq("user_id", user.id).eq("role", "admin").maybeSingle();
-      if (!data) { setAllowed(false); return; }
-      setAllowed(true);
-      fetchAll();
+      try {
+        const { data, error } = await supabase
+          .from("user_roles").select("role")
+          .eq("user_id", user.id).eq("role", "admin").maybeSingle();
+        if (error || !data) { setStatus("denied"); return; }
+        setStatus("ready");
+        loadAll();
+      } catch {
+        setStatus("denied");
+      }
     })();
-  }, [user, sessionLoading]);
+  }, [user, sessionLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function fetchAll() {
-    fetchStats();
-    fetchUsers();
-    fetchPlans();
-    fetchCampaigns();
-    fetchSiteSettings();
+  // ── Safe loaders ──────────────────────────────────────────────────────────
+  async function loadAll() {
+    setDataLoading(true);
+    await Promise.allSettled([loadStats(), loadUsers(), loadPlans(), loadCampaigns(), loadSettings()]);
+    setDataLoading(false);
   }
 
-  async function fetchStats() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayIso = today.toISOString();
-
-    const [usersRes, paidRes, genTodayRes, creditLedgerRes] = await Promise.all([
+  async function loadStats() {
+    const todayIso = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+    const [usersRes, paidRes, genRes, ledgerRes, recentProfilesRes, recentGensRes] = await Promise.allSettled([
       supabase.from("profiles").select("id", { count: "exact", head: true }),
       supabase.from("subscriptions").select("id", { count: "exact", head: true }).neq("plan", "free"),
       supabase.from("generations").select("id", { count: "exact", head: true }).gte("created_at", todayIso),
       supabase.from("credit_ledger").select("amount").gte("created_at", todayIso).lt("amount", 0),
+      supabase.from("profiles").select("*").order("created_at", { ascending: false }).limit(10),
+      supabase.from("generations").select("*").order("created_at", { ascending: false }).limit(10),
     ]);
 
-    const creditsConsumedToday = Math.abs(
-      creditLedgerRes.data?.reduce((s, e) => s + (e.amount || 0), 0) || 0
-    );
+    const totalUsers = usersRes.status === "fulfilled" ? (usersRes.value.count ?? 0) : 0;
+    const totalPaid = paidRes.status === "fulfilled" ? (paidRes.value.count ?? 0) : 0;
+    const totalGens = genRes.status === "fulfilled" ? (genRes.value.count ?? 0) : 0;
+    const ledgerData = ledgerRes.status === "fulfilled" ? (ledgerRes.value.data ?? []) : [];
+    const creditsUsed = Math.abs(ledgerData.reduce((s: number, e: any) => s + (e.amount || 0), 0));
 
-    setStats({
-      users: usersRes.count ?? 0,
-      paid: paidRes.count ?? 0,
-      generationsToday: genTodayRes.count ?? 0,
-      creditsUsedToday: creditsConsumedToday,
-    });
+    setStats({ users: totalUsers, paid: totalPaid, generationsToday: totalGens, creditsUsedToday: creditsUsed });
 
-    // Recent signups (last 10)
-    const { data: recentProfiles } = await supabase.from("profiles")
-      .select("*").order("created_at", { ascending: false }).limit(10);
-    if (recentProfiles) {
-      const ids = recentProfiles.map(p => p.id);
-      const { data: subs } = await supabase.from("subscriptions").select("*").in("user_id", ids);
-      const subMap = new Map(subs?.map(s => [s.user_id, s]));
-      setRecentUsers(recentProfiles.map(p => ({ ...p, subscriptions: subMap.get(p.id) || null })));
+    const profiles = recentProfilesRes.status === "fulfilled" ? (recentProfilesRes.value.data ?? []) : [];
+    if (profiles.length > 0) {
+      const ids = profiles.map((p: any) => p.id);
+      const [subsRes, walletsRes] = await Promise.allSettled([
+        supabase.from("subscriptions").select("*").in("user_id", ids),
+        supabase.from("credit_wallets").select("user_id, balance").in("user_id", ids),
+      ]);
+      const subs = subsRes.status === "fulfilled" ? (subsRes.value.data ?? []) : [];
+      const wallets = walletsRes.status === "fulfilled" ? (walletsRes.value.data ?? []) : [];
+      const subMap = new Map(subs.map((s: any) => [s.user_id, s]));
+      const walletMap = new Map(wallets.map((w: any) => [w.user_id, w.balance]));
+      setRecentUsers(profiles.map((p: any) => ({ ...p, sub: (subMap.get(p.id) ?? null) as Subscription | null, balance: (walletMap.get(p.id) ?? 0) as number })));
     }
 
-    // Recent generations (last 10)
-    const { data: genData } = await supabase.from("generations")
-      .select("*").order("created_at", { ascending: false }).limit(10);
-    setRecentGenerations((genData as Generation[]) ?? []);
+    const gens = recentGensRes.status === "fulfilled" ? (recentGensRes.value.data ?? []) : [];
+    setRecentGens(gens as Generation[]);
   }
 
-  async function fetchUsers() {
-    const { data: profiles } = await supabase.from("profiles")
-      .select("*").order("created_at", { ascending: false }).limit(200);
-    if (!profiles) return;
+  async function loadUsers() {
+    const [profilesRes] = await Promise.allSettled([
+      supabase.from("profiles").select("*").order("created_at", { ascending: false }).limit(200),
+    ]);
+    const profiles = profilesRes.status === "fulfilled" ? (profilesRes.value.data ?? []) : [];
+    if (profiles.length === 0) { setUsers([]); return; }
 
-    const ids = profiles.map(p => p.id);
-    const [{ data: subs }, { data: walletsData }] = await Promise.all([
+    const ids = profiles.map((p: any) => p.id);
+    const [subsRes, walletsRes] = await Promise.allSettled([
       supabase.from("subscriptions").select("*").in("user_id", ids),
       supabase.from("credit_wallets").select("user_id, balance").in("user_id", ids),
     ]);
-
-    const subMap = new Map(subs?.map(s => [s.user_id, s]));
-    const walletMap = new Map(walletsData?.map(w => [w.user_id, w.balance]));
-    setWallets(walletMap);
-    setUsers(profiles.map(p => ({ ...p, subscriptions: subMap.get(p.id) || null })));
+    const subs = subsRes.status === "fulfilled" ? (subsRes.value.data ?? []) : [];
+    const wallets = walletsRes.status === "fulfilled" ? (walletsRes.value.data ?? []) : [];
+    const subMap = new Map(subs.map((s: any) => [s.user_id, s]));
+    const walletMap = new Map(wallets.map((w: any) => [w.user_id, w.balance]));
+    setUsers(profiles.map((p: any) => ({ ...p, sub: (subMap.get(p.id) ?? null) as Subscription | null, balance: (walletMap.get(p.id) ?? 0) as number })));
   }
 
-  async function fetchPlans() {
-    const { data } = await supabase.from("plans").select("*").order("sort_order", { ascending: true });
-    setPlans((data as Plan[]) ?? []);
+  async function loadPlans() {
+    const [res] = await Promise.allSettled([supabase.from("plans").select("*").order("sort_order", { ascending: true })]);
+    if (res.status === "fulfilled") setPlans((res.value.data ?? []) as Plan[]);
   }
 
-  async function fetchCampaigns() {
-    const { data } = await supabase.from("email_campaigns")
-      .select("id, subject, recipient_type, recipient_count, status, created_at")
-      .order("created_at", { ascending: false }).limit(20);
-    setCampaigns((data as EmailCampaign[]) ?? []);
+  async function loadCampaigns() {
+    const [res] = await Promise.allSettled([
+      supabase.from("email_campaigns").select("id, subject, recipient_type, recipient_count, status, created_at")
+        .order("created_at", { ascending: false }).limit(20),
+    ]);
+    if (res.status === "fulfilled") setCampaigns((res.value.data ?? []) as Campaign[]);
   }
 
-  async function fetchSiteSettings() {
-    const { data } = await supabase.from("site_settings").select("*").eq("id", 1).maybeSingle();
-    if (data) setSiteSettings(data as SiteSettings);
+  async function loadSettings() {
+    const [res] = await Promise.allSettled([supabase.from("site_settings").select("*").eq("id", 1).maybeSingle()]);
+    if (res.status === "fulfilled" && res.value.data) setSettings(res.value.data as SiteSettings);
   }
 
-  async function handleAddRemoveCredits() {
-    if (!creditModal || !creditAmount) return;
-    const amount = parseInt(creditAmount);
+  // ── Credit actions ────────────────────────────────────────────────────────
+  async function handleCredits() {
+    if (!creditModal) return;
+    const amount = parseInt(creditAmount, 10);
     if (isNaN(amount) || amount <= 0) { toast.error("Enter a valid amount"); return; }
-    const finalAmount = creditModal.mode === "remove" ? -amount : amount;
-    const userId = creditModal.user.id;
+    const delta = creditModal.mode === "remove" ? -amount : amount;
+    const uid = creditModal.row.id;
 
-    // Get current balance
-    const { data: wallet } = await supabase.from("credit_wallets")
-      .select("balance").eq("user_id", userId).maybeSingle();
-    if (!wallet) { toast.error("Wallet not found"); return; }
+    const [walletRes] = await Promise.allSettled([
+      supabase.from("credit_wallets").select("balance").eq("user_id", uid).maybeSingle(),
+    ]);
+    if (walletRes.status !== "fulfilled" || !walletRes.value.data) { toast.error("Wallet not found"); return; }
 
-    const newBalance = Math.max(0, wallet.balance + finalAmount);
-    const [walletRes, ledgerRes] = await Promise.all([
-      supabase.from("credit_wallets").update({ balance: newBalance }).eq("user_id", userId),
+    const newBalance = Math.max(0, walletRes.value.data.balance + delta);
+    const [updateRes, ledgerRes] = await Promise.allSettled([
+      supabase.from("credit_wallets").update({ balance: newBalance }).eq("user_id", uid),
       supabase.from("credit_ledger").insert({
-        user_id: userId,
-        amount: finalAmount,
-        balance_after: newBalance,
-        reason: creditReason || (creditModal.mode === "add" ? "Admin credit grant" : "Admin credit removal"),
+        user_id: uid, amount: delta, balance_after: newBalance,
+        reason: creditReason.trim() || (creditModal.mode === "add" ? "Admin credit grant" : "Admin credit removal"),
       }),
     ]);
 
-    if (walletRes.error || ledgerRes.error) { toast.error("Failed to update credits"); return; }
+    if (updateRes.status === "rejected" || ledgerRes.status === "rejected") {
+      toast.error("Failed to update credits"); return;
+    }
     toast.success(`${creditModal.mode === "add" ? "Added" : "Removed"} ${amount} credits`);
-    setCreditModal(null);
-    setCreditAmount("");
-    setCreditReason("");
-    fetchUsers();
+    setCreditModal(null); setCreditAmount(""); setCreditReason("");
+    loadUsers();
   }
 
-  async function handleChangePlan() {
+  async function handlePlanChange() {
     if (!planModal) return;
-    const { error } = await supabase.from("subscriptions")
-      .upsert({ user_id: planModal.id, plan: newPlan as any, status: "active" }, { onConflict: "user_id" });
-    if (error) { toast.error("Failed to update plan"); return; }
+    const [res] = await Promise.allSettled([
+      supabase.from("subscriptions").upsert({ user_id: planModal.id, plan: newPlan as any, status: "active" }, { onConflict: "user_id" }),
+    ]);
+    if (res.status === "rejected") { toast.error("Failed to update plan"); return; }
     toast.success("Plan updated");
     setPlanModal(null);
-    fetchUsers();
+    loadUsers();
   }
 
-  async function updatePlan() {
+  // ── Plan editor ───────────────────────────────────────────────────────────
+  async function savePlan() {
     if (!editingPlan) return;
-    const priceMonthly = editingPlan.price_monthly_edit ?? Number(editingPlan.price_monthly ?? 0);
-    const priceYearly = editingPlan.price_yearly_edit ?? Number(editingPlan.price_yearly ?? 0);
-    const { error } = await supabase.from("plans").update({
-      display_name: editingPlan.display_name,
-      price_monthly_cents: Math.round(priceMonthly * 100),
-      price_yearly_cents: Math.round(priceYearly * 100),
-      monthly_credits: editingPlan.monthly_credits,
-      features: editingPlan.features,
-      is_active: editingPlan.is_active,
-    }).eq("id", editingPlan.id);
-
-    if (error) { toast.error("Failed to update plan"); return; }
-    toast.success("Plan updated — pricing page will reflect changes immediately");
-    setPlanDialogOpen(false);
-    setEditingPlan(null);
-    fetchPlans();
+    const priceMonthly = editingPlan._monthly ?? Number(editingPlan.price_monthly ?? 0);
+    const priceYearly = editingPlan._yearly ?? Number(editingPlan.price_yearly ?? 0);
+    const [res] = await Promise.allSettled([
+      supabase.from("plans").update({
+        display_name: editingPlan.display_name ?? editingPlan.name,
+        price_monthly_cents: Math.round(priceMonthly * 100),
+        price_yearly_cents: Math.round(priceYearly * 100),
+        monthly_credits: editingPlan.monthly_credits,
+        features: editingPlan.features,
+        is_active: editingPlan.is_active,
+      }).eq("id", editingPlan.id),
+    ]);
+    if (res.status === "rejected") { toast.error("Failed to save plan"); return; }
+    toast.success("Plan saved — pricing page updated immediately");
+    setPlanDialog(false); setEditingPlan(null);
+    loadPlans();
   }
 
-  function addFeature() {
-    if (!editingPlan || !newFeature.trim()) return;
-    setEditingPlan({ ...editingPlan, features: [...(editingPlan.features as string[]), newFeature.trim()] });
-    setNewFeature("");
-  }
-
-  function removeFeature(idx: number) {
-    if (!editingPlan) return;
-    const feats = [...(editingPlan.features as string[])];
-    feats.splice(idx, 1);
-    setEditingPlan({ ...editingPlan, features: feats });
-  }
-
+  // ── Campaign ──────────────────────────────────────────────────────────────
   async function sendCampaign() {
-    if (!campaignSubject.trim() || !campaignBody.trim()) {
-      toast.error("Subject and body are required");
-      return;
-    }
-    if (campaignTo === "specific" && !specificEmail.trim()) {
-      toast.error("Enter a recipient email");
-      return;
-    }
+    if (!subject.trim() || !body.trim()) { toast.error("Subject and body required"); return; }
+    if (campaignTo === "specific" && !specificEmail.trim()) { toast.error("Enter a recipient email"); return; }
     setSending(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-campaign-email`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
-          recipient_type: campaignTo,
-          specific_email: campaignTo === "specific" ? specificEmail.trim() : undefined,
-          subject: campaignSubject,
-          html_body: campaignBody,
-          sent_by: user?.id,
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ recipient_type: campaignTo, specific_email: campaignTo === "specific" ? specificEmail.trim() : undefined, subject, html_body: body, sent_by: user?.id }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed");
-      toast.success(`Campaign sent to ${json.sent_count} recipients`);
-      setCampaignSubject("");
-      setCampaignBody("");
-      setSpecificEmail("");
-      fetchCampaigns();
+      if (!res.ok) throw new Error(json.error || "Send failed");
+      toast.success(`Sent to ${json.sent_count} recipient(s)`);
+      setSubject(""); setBody(""); setSpecificEmail("");
+      loadCampaigns();
     } catch (err: any) {
-      toast.error(err.message || "Failed to send campaign");
+      toast.error(err.message || "Failed to send");
     } finally {
       setSending(false);
     }
   }
 
-  async function saveSiteSettings() {
+  // ── Site settings ─────────────────────────────────────────────────────────
+  async function saveSettings() {
     setSavingSettings(true);
-    const { error } = await supabase.from("site_settings")
-      .update({ ...siteSettings, updated_at: new Date().toISOString() }).eq("id", 1);
+    const [res] = await Promise.allSettled([
+      supabase.from("site_settings").update({ ...settings, updated_at: new Date().toISOString() }).eq("id", 1),
+    ]);
     setSavingSettings(false);
-    if (error) { toast.error("Failed to save settings"); return; }
+    if (res.status === "rejected") { toast.error("Failed to save settings"); return; }
     toast.success("Settings saved");
   }
 
+  // ── Filtered users ────────────────────────────────────────────────────────
   const filteredUsers = users.filter(u => {
-    const matchesSearch = !userSearch ||
-      u.display_name?.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.id.toLowerCase().includes(userSearch.toLowerCase());
-    const matchesPlan = userFilter === "all" || (u.subscriptions?.plan || "free") === userFilter;
-    return matchesSearch && matchesPlan;
+    const q = userSearch.toLowerCase();
+    const matchName = !q || (u.display_name?.toLowerCase().includes(q) ?? false) || u.id.toLowerCase().includes(q);
+    const plan = u.sub?.plan ?? "free";
+    const matchPlan = userFilter === "all" || plan === userFilter;
+    return matchName && matchPlan;
   });
 
-  if (allowed === null) {
+  // ── Render guards ─────────────────────────────────────────────────────────
+  if (status === "loading") {
     return (
       <div className="min-h-screen grid place-items-center">
         <Loader2 className="size-8 animate-spin text-primary" />
       </div>
     );
   }
-  if (!allowed) {
+  if (status === "denied") {
     return (
-      <div className="min-h-screen grid place-items-center">
-        <Card className="glass border-0 p-8 text-center">
+      <div className="min-h-screen grid place-items-center p-8">
+        <Card className="glass border-0 p-8 text-center max-w-sm">
           <Shield className="size-12 mx-auto text-muted-foreground mb-4" />
           <h2 className="text-xl font-semibold">Admin Access Required</h2>
           <p className="text-muted-foreground mt-2">You don't have permission to view this page.</p>
-          <Button onClick={() => navigate({ to: "/dashboard" })} className="mt-4">Go to Dashboard</Button>
+          <Button className="mt-4 w-full" onClick={() => navigate({ to: "/dashboard" })}>Go to Dashboard</Button>
         </Card>
       </div>
     );
@@ -388,33 +361,30 @@ function Admin() {
   return (
     <DashboardLayout>
       <div className="p-6 md:p-10 max-w-7xl mx-auto">
-        <header className="flex items-center justify-between mb-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="font-display text-3xl font-bold">Admin Panel</h1>
-            <p className="text-muted-foreground mt-1">Full control over users, plans, and platform settings</p>
+            <p className="text-muted-foreground mt-1">Full control over users, plans, and platform</p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchAll}>
-            <RefreshCw className="size-4 mr-2" /> Refresh
+          <Button variant="outline" size="sm" onClick={loadAll} disabled={dataLoading}>
+            <RefreshCw className={`size-4 mr-2 ${dataLoading ? "animate-spin" : ""}`} /> Refresh
           </Button>
-        </header>
+        </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        {dataLoading && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
+            <Loader2 className="size-4 animate-spin" /> Loading data…
+          </div>
+        )}
+
+        <Tabs value={tab} onValueChange={setTab} className="space-y-6">
           <TabsList className="bg-muted/50 flex-wrap h-auto gap-1">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-background">
-              <Zap className="size-4 mr-1.5" /> Overview
-            </TabsTrigger>
-            <TabsTrigger value="users" className="data-[state=active]:bg-background">
-              <Users className="size-4 mr-1.5" /> Users
-            </TabsTrigger>
-            <TabsTrigger value="plans" className="data-[state=active]:bg-background">
-              <CreditCard className="size-4 mr-1.5" /> Plans
-            </TabsTrigger>
-            <TabsTrigger value="campaigns" className="data-[state=active]:bg-background">
-              <Mail className="size-4 mr-1.5" /> Campaigns
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-background">
-              <Settings className="size-4 mr-1.5" /> Settings
-            </TabsTrigger>
+            <TabsTrigger value="overview"><Zap className="size-4 mr-1.5" /> Overview</TabsTrigger>
+            <TabsTrigger value="users"><Users className="size-4 mr-1.5" /> Users</TabsTrigger>
+            <TabsTrigger value="plans"><CreditCard className="size-4 mr-1.5" /> Plans</TabsTrigger>
+            <TabsTrigger value="campaigns"><Mail className="size-4 mr-1.5" /> Campaigns</TabsTrigger>
+            <TabsTrigger value="settings"><Settings className="size-4 mr-1.5" /> Settings</TabsTrigger>
           </TabsList>
 
           {/* ── OVERVIEW ── */}
@@ -441,75 +411,74 @@ function Admin() {
                 <h3 className="font-display font-semibold mb-4 flex items-center gap-2">
                   <Users className="size-4" /> Recent Signups
                 </h3>
-                <div className="space-y-3">
-                  {recentUsers.map(u => (
-                    <div key={u.id} className="flex items-center gap-3">
-                      <div className="size-8 rounded-full bg-gradient-to-br from-primary to-primary/50 grid place-items-center text-white text-xs font-bold shrink-0">
-                        {(u.display_name?.[0] || "U").toUpperCase()}
+                {recentUsers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No users yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {recentUsers.map(u => (
+                      <div key={u.id} className="flex items-center gap-3">
+                        <div className="size-8 rounded-full bg-gradient-to-br from-primary to-primary/50 grid place-items-center text-white text-xs font-bold shrink-0">
+                          {(u.display_name?.[0] ?? "U").toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{u.display_name ?? "Unnamed"}</div>
+                          <div className="text-xs text-muted-foreground">{u.id.slice(0, 12)}…</div>
+                        </div>
+                        <Badge variant="outline" className="text-xs capitalize shrink-0">{u.sub?.plan ?? "free"}</Badge>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {new Date(u.created_at).toLocaleDateString()}
+                        </span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{u.display_name || "Unnamed"}</div>
-                        <div className="text-xs text-muted-foreground">{u.id.slice(0, 12)}…</div>
-                      </div>
-                      <div className="text-xs text-muted-foreground shrink-0">
-                        {new Date(u.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                  ))}
-                  {recentUsers.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4">No users yet</p>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </Card>
 
               <Card className="glass border-0 p-6">
                 <h3 className="font-display font-semibold mb-4 flex items-center gap-2">
                   <Zap className="size-4" /> Recent Generations
                 </h3>
-                <div className="space-y-3">
-                  {recentGenerations.map(g => (
-                    <div key={g.id} className="flex items-center gap-3">
-                      <div className="size-10 rounded-lg bg-muted overflow-hidden shrink-0">
-                        {g.thumbnail_url || g.result_url ? (
-                          <img src={g.thumbnail_url || g.result_url || ""} alt="" className="size-full object-cover" />
-                        ) : (
-                          <div className="size-full grid place-items-center">
-                            {g.tool_type === "video" ? <Video className="size-4 text-muted-foreground" /> : <ImageIcon className="size-4 text-muted-foreground" />}
+                {recentGens.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No generations yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {recentGens.map(g => (
+                      <div key={g.id} className="flex items-center gap-3">
+                        <div className="size-10 rounded-lg bg-muted overflow-hidden shrink-0">
+                          {(g.thumbnail_url ?? g.result_url) ? (
+                            <img src={g.thumbnail_url ?? g.result_url ?? ""} alt="" className="size-full object-cover" />
+                          ) : (
+                            <div className="size-full grid place-items-center">
+                              {g.tool_type === "video" ? <Video className="size-4 text-muted-foreground" /> : <ImageIcon className="size-4 text-muted-foreground" />}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm truncate">{g.prompt}</div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <Badge variant="outline" className="text-xs px-1 py-0">{g.tool_type}</Badge>
+                            <span className="text-xs text-muted-foreground">{g.credits_used} cr</span>
                           </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm truncate">{g.prompt}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <Badge variant="outline" className="text-xs px-1 py-0">{g.tool_type}</Badge>
-                          <span className="text-xs text-muted-foreground">{g.credits_used} cr</span>
+                        </div>
+                        <div className="shrink-0">
+                          {g.status === "done" ? <Check className="size-4 text-green-400" /> :
+                           g.status === "failed" ? <X className="size-4 text-red-400" /> :
+                           <Clock className="size-4 text-amber-400" />}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {g.status === "done" ? <Check className="size-4 text-green-400" /> :
-                         g.status === "failed" ? <X className="size-4 text-red-400" /> :
-                         <Clock className="size-4 text-amber-400" />}
-                      </div>
-                    </div>
-                  ))}
-                  {recentGenerations.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4">No generations yet</p>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </Card>
             </div>
 
             <Card className="glass border-0 p-6">
               <h3 className="font-display font-semibold mb-4">Quick Actions</h3>
               <div className="grid sm:grid-cols-4 gap-3">
-                {[
-                  { label: "Manage Users", icon: Users, tab: "users" },
-                  { label: "Edit Plans", icon: CreditCard, tab: "plans" },
-                  { label: "Send Campaign", icon: Mail, tab: "campaigns" },
-                  { label: "Site Settings", icon: Settings, tab: "settings" },
-                ].map(a => (
-                  <Button key={a.tab} variant="outline" className="justify-start" onClick={() => setActiveTab(a.tab)}>
-                    <a.icon className="size-4 mr-2" /> {a.label}
+                {(["users", "plans", "campaigns", "settings"] as const).map(t => (
+                  <Button key={t} variant="outline" className="capitalize justify-start" onClick={() => setTab(t)}>
+                    {t === "users" ? <Users className="size-4 mr-2" /> : t === "plans" ? <CreditCard className="size-4 mr-2" /> : t === "campaigns" ? <Mail className="size-4 mr-2" /> : <Settings className="size-4 mr-2" />}
+                    {t === "users" ? "Manage Users" : t === "plans" ? "Edit Plans" : t === "campaigns" ? "Send Campaign" : "Site Settings"}
                   </Button>
                 ))}
               </div>
@@ -519,16 +488,13 @@ function Admin() {
           {/* ── USERS ── */}
           <TabsContent value="users">
             <Card className="glass border-0 p-6">
-              <div className="flex flex-wrap items-center gap-3 mb-6">
+              <div className="flex flex-wrap gap-3 mb-6">
                 <div className="relative flex-1 min-w-[200px]">
                   <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input placeholder="Search by name or ID…" className="pl-9"
-                    value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+                  <Input placeholder="Search by name or ID…" className="pl-9" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
                 </div>
                 <Select value={userFilter} onValueChange={setUserFilter}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="All plans" />
-                  </SelectTrigger>
+                  <SelectTrigger className="w-[140px]"><SelectValue placeholder="All plans" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Plans</SelectItem>
                     <SelectItem value="free">Free</SelectItem>
@@ -539,105 +505,101 @@ function Admin() {
                 </Select>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-3 font-medium text-muted-foreground">User</th>
-                      <th className="text-left py-3 font-medium text-muted-foreground">Plan</th>
-                      <th className="text-right py-3 font-medium text-muted-foreground">Credits</th>
-                      <th className="text-left py-3 font-medium text-muted-foreground">Joined</th>
-                      <th className="text-right py-3 font-medium text-muted-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.slice(0, 50).map(u => (
-                      <tr key={u.id} className="border-b border-border/50 hover:bg-muted/20 transition">
-                        <td className="py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="size-8 rounded-full bg-gradient-to-br from-primary to-primary/50 grid place-items-center text-white text-xs font-bold shrink-0">
-                              {(u.display_name?.[0] || "U").toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="font-medium">{u.display_name || "Unnamed"}</div>
-                              <div className="text-xs text-muted-foreground">{u.id.slice(0, 10)}…</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3">
-                          <Badge variant="outline" className={
-                            u.subscriptions?.plan === "business" ? "border-amber-500 text-amber-500" :
-                            u.subscriptions?.plan === "pro" ? "border-primary text-primary" :
-                            u.subscriptions?.plan === "starter" ? "border-blue-400 text-blue-400" : ""
-                          }>
-                            {u.subscriptions?.plan || "free"}
-                          </Badge>
-                        </td>
-                        <td className="py-3 text-right font-medium">
-                          {(wallets.get(u.id) ?? 0).toLocaleString()}
-                        </td>
-                        <td className="py-3 text-muted-foreground text-xs">
-                          {new Date(u.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button variant="outline" size="sm" className="h-7 text-xs px-2 text-green-500 border-green-500/30"
-                              onClick={() => { setCreditModal({ user: u, mode: "add" }); setCreditAmount(""); setCreditReason(""); }}>
-                              +Credits
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-7 text-xs px-2 text-red-500 border-red-500/30"
-                              onClick={() => { setCreditModal({ user: u, mode: "remove" }); setCreditAmount(""); setCreditReason(""); }}>
-                              -Credits
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-7 text-xs px-2"
-                              onClick={() => { setPlanModal(u); setNewPlan(u.subscriptions?.plan || "free"); }}>
-                              Plan
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {filteredUsers.length > 50 && (
-                <p className="text-center text-sm text-muted-foreground mt-4">
-                  Showing 50 of {filteredUsers.length} users
+              {filteredUsers.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  {dataLoading ? "Loading users…" : "No users found"}
                 </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-3 font-medium text-muted-foreground">User</th>
+                        <th className="text-left py-3 font-medium text-muted-foreground">Plan</th>
+                        <th className="text-right py-3 font-medium text-muted-foreground">Credits</th>
+                        <th className="text-left py-3 font-medium text-muted-foreground">Joined</th>
+                        <th className="text-right py-3 font-medium text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.slice(0, 50).map(u => (
+                        <tr key={u.id} className="border-b border-border/50 hover:bg-muted/20 transition">
+                          <td className="py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="size-8 rounded-full bg-gradient-to-br from-primary to-primary/50 grid place-items-center text-white text-xs font-bold shrink-0">
+                                {(u.display_name?.[0] ?? "U").toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="font-medium">{u.display_name ?? "Unnamed"}</div>
+                                <div className="text-xs text-muted-foreground">{u.id.slice(0, 10)}…</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3">
+                            <Badge variant="outline" className={
+                              u.sub?.plan === "business" ? "border-amber-500 text-amber-500" :
+                              u.sub?.plan === "pro" ? "border-primary text-primary" :
+                              u.sub?.plan === "starter" ? "border-blue-400 text-blue-400" : ""
+                            }>
+                              {u.sub?.plan ?? "free"}
+                            </Badge>
+                          </td>
+                          <td className="py-3 text-right font-medium">{u.balance.toLocaleString()}</td>
+                          <td className="py-3 text-muted-foreground text-xs">{new Date(u.created_at).toLocaleDateString()}</td>
+                          <td className="py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="outline" size="sm" className="h-7 text-xs px-2 text-green-500 border-green-500/30"
+                                onClick={() => { setCreditModal({ row: u, mode: "add" }); setCreditAmount(""); setCreditReason(""); }}>
+                                +Credits
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-7 text-xs px-2 text-red-500 border-red-500/30"
+                                onClick={() => { setCreditModal({ row: u, mode: "remove" }); setCreditAmount(""); setCreditReason(""); }}>
+                                -Credits
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-7 text-xs px-2"
+                                onClick={() => { setPlanModal(u); setNewPlan(u.sub?.plan ?? "free"); }}>
+                                Plan
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {filteredUsers.length > 50 && (
+                    <p className="text-center text-sm text-muted-foreground mt-4">Showing 50 of {filteredUsers.length}</p>
+                  )}
+                </div>
               )}
             </Card>
           </TabsContent>
 
           {/* ── PLANS ── */}
           <TabsContent value="plans">
-            <p className="text-sm text-muted-foreground mb-4">
-              Changes here reflect immediately on the public pricing page.
-            </p>
+            <p className="text-sm text-muted-foreground mb-4">Changes reflect immediately on the public pricing page.</p>
+            {plans.length === 0 && !dataLoading && (
+              <p className="text-sm text-muted-foreground">No plans found.</p>
+            )}
             <div className="grid md:grid-cols-2 gap-4">
               {plans.map(plan => (
                 <Card key={plan.id} className="glass border-0 p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="font-display text-xl font-semibold">{plan.display_name || plan.name}</h3>
+                      <h3 className="font-display text-xl font-semibold">{plan.display_name ?? plan.name}</h3>
                       <p className="text-xs text-muted-foreground">slug: {plan.name}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge className={plan.is_active ? "bg-green-500/20 text-green-400 border-green-500/30 border" : "bg-red-500/20 text-red-400 border-red-500/30 border"}>
+                      <Badge className={plan.is_active ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"}>
                         {plan.is_active ? "Active" : "Inactive"}
                       </Badge>
                       <Button variant="ghost" size="sm" onClick={() => {
-                        setEditingPlan({
-                          ...plan,
-                          price_monthly_edit: Number(plan.price_monthly ?? 0),
-                          price_yearly_edit: Number(plan.price_yearly ?? 0),
-                        });
-                        setPlanDialogOpen(true);
+                        setEditingPlan({ ...plan, _monthly: Number(plan.price_monthly ?? 0), _yearly: Number(plan.price_yearly ?? 0) });
+                        setPlanDialog(true);
                       }}>
                         <Pencil className="size-4" />
                       </Button>
                     </div>
                   </div>
-
                   <div className="grid grid-cols-3 gap-3 mb-4">
                     <div className="rounded-lg bg-muted/30 p-3 text-center">
                       <div className="text-xs text-muted-foreground">Monthly</div>
@@ -652,93 +614,24 @@ function Admin() {
                       <div className="font-bold">{plan.monthly_credits.toLocaleString()}</div>
                     </div>
                   </div>
-
                   <div className="flex flex-wrap gap-1.5">
-                    {((plan.features as string[]) || []).map((f, i) => (
+                    {((plan.features as string[]) ?? []).map((f, i) => (
                       <Badge key={i} variant="secondary" className="bg-muted/50 text-xs">{f}</Badge>
                     ))}
                   </div>
                 </Card>
               ))}
             </div>
-
-            <Dialog open={planDialogOpen} onOpenChange={setPlanDialogOpen}>
-              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Edit Plan: {editingPlan?.display_name || editingPlan?.name}</DialogTitle>
-                </DialogHeader>
-                {editingPlan && (
-                  <div className="space-y-4 mt-2">
-                    <div>
-                      <Label>Display Name</Label>
-                      <Input value={editingPlan.display_name ?? ""} className="mt-1"
-                        onChange={e => setEditingPlan({ ...editingPlan, display_name: e.target.value })} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label>Monthly Price ($)</Label>
-                        <Input type="number" step="0.01" className="mt-1"
-                          value={editingPlan.price_monthly_edit ?? 0}
-                          onChange={e => setEditingPlan({ ...editingPlan, price_monthly_edit: Number(e.target.value) })} />
-                      </div>
-                      <div>
-                        <Label>Yearly Price ($)</Label>
-                        <Input type="number" step="0.01" className="mt-1"
-                          value={editingPlan.price_yearly_edit ?? 0}
-                          onChange={e => setEditingPlan({ ...editingPlan, price_yearly_edit: Number(e.target.value) })} />
-                      </div>
-                    </div>
-                    <div>
-                      <Label>Monthly Credits</Label>
-                      <Input type="number" className="mt-1"
-                        value={editingPlan.monthly_credits}
-                        onChange={e => setEditingPlan({ ...editingPlan, monthly_credits: Number(e.target.value) })} />
-                    </div>
-                    <div>
-                      <Label>Features</Label>
-                      <div className="mt-2 space-y-2">
-                        {((editingPlan.features as string[]) || []).map((f, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <span className="flex-1 text-sm bg-muted/30 px-3 py-1.5 rounded-lg">{f}</span>
-                            <Button variant="ghost" size="sm" className="size-7 p-0 text-destructive" onClick={() => removeFeature(i)}>
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          </div>
-                        ))}
-                        <div className="flex gap-2">
-                          <Input placeholder="Add feature…" value={newFeature}
-                            onChange={e => setNewFeature(e.target.value)}
-                            onKeyDown={e => e.key === "Enter" && addFeature()} />
-                          <Button variant="outline" size="sm" onClick={addFeature}>
-                            <Plus className="size-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Switch id="planActive" checked={editingPlan.is_active}
-                        onCheckedChange={v => setEditingPlan({ ...editingPlan, is_active: v })} />
-                      <Label htmlFor="planActive" className="cursor-pointer">Active (visible on pricing page)</Label>
-                    </div>
-                  </div>
-                )}
-                <DialogFooter className="mt-4 gap-2">
-                  <Button variant="outline" onClick={() => setPlanDialogOpen(false)}>Cancel</Button>
-                  <Button className="btn-gradient text-white border-0" onClick={updatePlan}>Save Changes</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
           </TabsContent>
 
           {/* ── CAMPAIGNS ── */}
           <TabsContent value="campaigns" className="space-y-6">
             <Card className="glass border-0 p-6">
               <h3 className="font-display font-semibold mb-4">Compose Email Campaign</h3>
-
               <div className="space-y-4">
                 <div>
                   <Label>To</Label>
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <div className="flex flex-wrap gap-2 mt-2">
                     {(["all", "free", "paid", "specific"] as const).map(t => (
                       <Button key={t} variant={campaignTo === t ? "default" : "outline"} size="sm"
                         className={campaignTo === t ? "btn-gradient text-white border-0" : ""}
@@ -748,57 +641,37 @@ function Admin() {
                     ))}
                   </div>
                   {campaignTo === "specific" && (
-                    <Input className="mt-2" placeholder="recipient@example.com"
-                      value={specificEmail} onChange={e => setSpecificEmail(e.target.value)} />
+                    <Input className="mt-2" placeholder="recipient@example.com" value={specificEmail} onChange={e => setSpecificEmail(e.target.value)} />
                   )}
                 </div>
-
                 <div>
                   <Label>Templates</Label>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {EMAIL_TEMPLATES.map(t => (
-                      <Button key={t.name} variant="outline" size="sm" onClick={() => {
-                        setCampaignSubject(t.subject);
-                        setCampaignBody(t.body);
-                      }}>
+                      <Button key={t.name} variant="outline" size="sm" onClick={() => { setSubject(t.subject); setBody(t.body); }}>
                         {t.name}
                       </Button>
                     ))}
                   </div>
                 </div>
-
                 <div>
                   <Label>Subject</Label>
-                  <Input className="mt-1" placeholder="Email subject…"
-                    value={campaignSubject} onChange={e => setCampaignSubject(e.target.value)} />
+                  <Input className="mt-1" placeholder="Email subject…" value={subject} onChange={e => setSubject(e.target.value)} />
                 </div>
-
                 <div>
                   <Label>Body (HTML supported)</Label>
-                  <Textarea className="mt-1 min-h-[200px] font-mono text-sm"
-                    placeholder="<p>Your email content here...</p>"
-                    value={campaignBody} onChange={e => setCampaignBody(e.target.value)} />
+                  <Textarea className="mt-1 min-h-[180px] font-mono text-sm" placeholder="<p>Your email content…</p>" value={body} onChange={e => setBody(e.target.value)} />
                 </div>
-
-                <div className="flex items-center justify-between pt-2 flex-wrap gap-3">
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={() => setPreviewOpen(true)}
-                      disabled={!campaignBody.trim()}>
-                      Preview
-                    </Button>
-                    <Button className="btn-gradient text-white border-0"
-                      disabled={sending || !campaignSubject.trim() || !campaignBody.trim()}
-                      onClick={sendCampaign}>
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setPreview(true)} disabled={!body.trim()}>Preview</Button>
+                    <Button className="btn-gradient text-white border-0" disabled={sending || !subject.trim() || !body.trim()} onClick={sendCampaign}>
                       {sending ? <><Loader2 className="size-4 mr-2 animate-spin" /> Sending…</> : <><Send className="size-4 mr-2" /> Send Campaign</>}
                     </Button>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Recipients:{" "}
-                    <span className="font-medium text-foreground">
-                      {campaignTo === "all" ? `~${stats.users}` :
-                       campaignTo === "paid" ? `~${stats.paid}` :
-                       campaignTo === "free" ? `~${stats.users - stats.paid}` :
-                       specificEmail || "—"}
+                    Recipients: <span className="font-medium text-foreground">
+                      {campaignTo === "all" ? `~${stats.users}` : campaignTo === "paid" ? `~${stats.paid}` : campaignTo === "free" ? `~${Math.max(0, stats.users - stats.paid)}` : specificEmail || "—"}
                     </span>
                   </p>
                 </div>
@@ -832,9 +705,7 @@ function Admin() {
                             {new Date(c.created_at).toLocaleDateString()}
                           </td>
                           <td className="py-2.5 text-right">
-                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30 border text-xs">
-                              {c.status}
-                            </Badge>
+                            <Badge className="bg-green-500/20 text-green-400 border border-green-500/30 text-xs">{c.status}</Badge>
                           </td>
                         </tr>
                       ))}
@@ -854,43 +725,34 @@ function Admin() {
               <div className="space-y-5">
                 <div>
                   <Label>Site Name</Label>
-                  <Input className="mt-1" value={siteSettings.site_name}
-                    onChange={e => setSiteSettings({ ...siteSettings, site_name: e.target.value })} />
+                  <Input className="mt-1" value={settings.site_name} onChange={e => setSettings({ ...settings, site_name: e.target.value })} />
                 </div>
                 <div>
                   <Label>Support Email</Label>
-                  <Input className="mt-1" type="email" value={siteSettings.support_email}
-                    onChange={e => setSiteSettings({ ...siteSettings, support_email: e.target.value })} />
+                  <Input className="mt-1" type="email" value={settings.support_email} onChange={e => setSettings({ ...settings, support_email: e.target.value })} />
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <Label>Free Signup Credits</Label>
-                    <Input className="mt-1" type="number"
-                      value={siteSettings.free_signup_credits}
-                      onChange={e => setSiteSettings({ ...siteSettings, free_signup_credits: Number(e.target.value) })} />
+                    <Input className="mt-1" type="number" value={settings.free_signup_credits} onChange={e => setSettings({ ...settings, free_signup_credits: Number(e.target.value) })} />
                   </div>
                   <div>
                     <Label>Max Images/Day</Label>
-                    <Input className="mt-1" type="number"
-                      value={siteSettings.max_images_per_day}
-                      onChange={e => setSiteSettings({ ...siteSettings, max_images_per_day: Number(e.target.value) })} />
+                    <Input className="mt-1" type="number" value={settings.max_images_per_day} onChange={e => setSettings({ ...settings, max_images_per_day: Number(e.target.value) })} />
                   </div>
                   <div>
                     <Label>Max Videos/Day</Label>
-                    <Input className="mt-1" type="number"
-                      value={siteSettings.max_videos_per_day}
-                      onChange={e => setSiteSettings({ ...siteSettings, max_videos_per_day: Number(e.target.value) })} />
+                    <Input className="mt-1" type="number" value={settings.max_videos_per_day} onChange={e => setSettings({ ...settings, max_videos_per_day: Number(e.target.value) })} />
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-4 rounded-xl bg-muted/30 border border-border">
-                  <Switch id="maintenanceMode" checked={siteSettings.maintenance_mode}
-                    onCheckedChange={v => setSiteSettings({ ...siteSettings, maintenance_mode: v })} />
+                  <Switch id="maintenance" checked={settings.maintenance_mode} onCheckedChange={v => setSettings({ ...settings, maintenance_mode: v })} />
                   <div>
-                    <Label htmlFor="maintenanceMode" className="cursor-pointer font-medium">Maintenance Mode</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">Shows a maintenance banner to all non-admin users</p>
+                    <Label htmlFor="maintenance" className="cursor-pointer font-medium">Maintenance Mode</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">Shows a maintenance banner to non-admin users</p>
                   </div>
                 </div>
-                <Button className="btn-gradient text-white border-0 w-full" onClick={saveSiteSettings} disabled={savingSettings}>
+                <Button className="btn-gradient text-white border-0 w-full" onClick={saveSettings} disabled={savingSettings}>
                   {savingSettings ? <><Loader2 className="size-4 mr-2 animate-spin" /> Saving…</> : "Save Settings"}
                 </Button>
               </div>
@@ -899,48 +761,42 @@ function Admin() {
         </Tabs>
       </div>
 
-      {/* Credit Modal */}
+      {/* ── Credits modal ── */}
       <Dialog open={!!creditModal} onOpenChange={open => !open && setCreditModal(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>
-              {creditModal?.mode === "add" ? "Add Credits" : "Remove Credits"} — {creditModal?.user.display_name || "User"}
-            </DialogTitle>
+            <DialogTitle>{creditModal?.mode === "add" ? "Add Credits" : "Remove Credits"} — {creditModal?.row.display_name ?? "User"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div>
               <Label>Amount</Label>
-              <Input type="number" className="mt-1" placeholder="e.g. 100"
-                value={creditAmount} onChange={e => setCreditAmount(e.target.value)} />
+              <Input type="number" className="mt-1" placeholder="e.g. 100" value={creditAmount} onChange={e => setCreditAmount(e.target.value)} />
             </div>
             <div>
               <Label>Reason (optional)</Label>
-              <Input className="mt-1" placeholder="e.g. Promotional grant"
-                value={creditReason} onChange={e => setCreditReason(e.target.value)} />
+              <Input className="mt-1" placeholder="e.g. Promotional grant" value={creditReason} onChange={e => setCreditReason(e.target.value)} />
             </div>
           </div>
           <DialogFooter className="mt-4 gap-2">
             <Button variant="outline" onClick={() => setCreditModal(null)}>Cancel</Button>
-            <Button className={creditModal?.mode === "add" ? "btn-gradient text-white border-0" : "bg-destructive text-white hover:bg-destructive/90"}
-              onClick={handleAddRemoveCredits}>
+            <Button onClick={handleCredits}
+              className={creditModal?.mode === "add" ? "btn-gradient text-white border-0" : "bg-destructive text-white hover:bg-destructive/90"}>
               {creditModal?.mode === "add" ? "Add Credits" : "Remove Credits"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Change Plan Modal */}
+      {/* ── Change plan modal ── */}
       <Dialog open={!!planModal} onOpenChange={open => !open && setPlanModal(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Change Plan — {planModal?.display_name || "User"}</DialogTitle>
+            <DialogTitle>Change Plan — {planModal?.display_name ?? "User"}</DialogTitle>
           </DialogHeader>
           <div className="mt-4">
             <Label>New Plan</Label>
             <Select value={newPlan} onValueChange={setNewPlan}>
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="free">Free</SelectItem>
                 <SelectItem value="starter">Starter (Basic)</SelectItem>
@@ -951,19 +807,99 @@ function Admin() {
           </div>
           <DialogFooter className="mt-4 gap-2">
             <Button variant="outline" onClick={() => setPlanModal(null)}>Cancel</Button>
-            <Button className="btn-gradient text-white border-0" onClick={handleChangePlan}>Save</Button>
+            <Button className="btn-gradient text-white border-0" onClick={handlePlanChange}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Email Preview Modal */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+      {/* ── Plan edit dialog ── */}
+      <Dialog open={planDialog} onOpenChange={setPlanDialog}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Plan: {editingPlan?.display_name ?? editingPlan?.name}</DialogTitle>
+          </DialogHeader>
+          {editingPlan && (
+            <div className="space-y-4 mt-2">
+              <div>
+                <Label>Display Name</Label>
+                <Input value={editingPlan.display_name ?? ""} className="mt-1"
+                  onChange={e => setEditingPlan({ ...editingPlan, display_name: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Monthly Price ($)</Label>
+                  <Input type="number" step="0.01" className="mt-1"
+                    value={editingPlan._monthly ?? 0}
+                    onChange={e => setEditingPlan({ ...editingPlan, _monthly: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <Label>Yearly Price ($)</Label>
+                  <Input type="number" step="0.01" className="mt-1"
+                    value={editingPlan._yearly ?? 0}
+                    onChange={e => setEditingPlan({ ...editingPlan, _yearly: Number(e.target.value) })} />
+                </div>
+              </div>
+              <div>
+                <Label>Monthly Credits</Label>
+                <Input type="number" className="mt-1"
+                  value={editingPlan.monthly_credits}
+                  onChange={e => setEditingPlan({ ...editingPlan, monthly_credits: Number(e.target.value) })} />
+              </div>
+              <div>
+                <Label>Features</Label>
+                <div className="mt-2 space-y-2">
+                  {((editingPlan.features as string[]) ?? []).map((f, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="flex-1 text-sm bg-muted/30 px-3 py-1.5 rounded-lg">{f}</span>
+                      <Button variant="ghost" size="sm" className="size-7 p-0 text-destructive" onClick={() => {
+                        const feats = [...(editingPlan.features as string[])];
+                        feats.splice(i, 1);
+                        setEditingPlan({ ...editingPlan, features: feats });
+                      }}>
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <Input placeholder="Add feature…" value={newFeature} onChange={e => setNewFeature(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && newFeature.trim()) {
+                          setEditingPlan({ ...editingPlan, features: [...(editingPlan.features as string[]), newFeature.trim()] });
+                          setNewFeature("");
+                        }
+                      }} />
+                    <Button variant="outline" size="sm" onClick={() => {
+                      if (!newFeature.trim()) return;
+                      setEditingPlan({ ...editingPlan, features: [...(editingPlan.features as string[]), newFeature.trim()] });
+                      setNewFeature("");
+                    }}>
+                      <Plus className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch id="planActive" checked={editingPlan.is_active}
+                  onCheckedChange={v => setEditingPlan({ ...editingPlan, is_active: v })} />
+                <Label htmlFor="planActive" className="cursor-pointer">Active (visible on pricing page)</Label>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="mt-4 gap-2">
+            <Button variant="outline" onClick={() => { setPlanDialog(false); setEditingPlan(null); }}>Cancel</Button>
+            <Button className="btn-gradient text-white border-0" onClick={savePlan}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Email preview modal ── */}
+      <Dialog open={preview} onOpenChange={setPreview}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Email Preview — {campaignSubject || "No subject"}</DialogTitle>
+            <DialogTitle>Preview — {subject || "No subject"}</DialogTitle>
           </DialogHeader>
           <div className="mt-4 rounded-xl border border-border bg-white text-black p-6 prose max-w-none"
-            dangerouslySetInnerHTML={{ __html: campaignBody }} />
+            dangerouslySetInnerHTML={{ __html: body }} />
         </DialogContent>
       </Dialog>
     </DashboardLayout>

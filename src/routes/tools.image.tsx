@@ -50,6 +50,17 @@ const CREDITS_PER_IMAGE = 5;
 const MAX_PROMPT_LENGTH = 4000;
 type Generation = Tables<"generations">;
 
+function GeneratingStatus({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [startTime]);
+  if (elapsed < 30) return <span>Generating your image… ({elapsed}s)</span>;
+  if (elapsed < 60) return <span>Almost ready… ({elapsed}s)</span>;
+  return <span>Taking longer than usual, please wait… ({elapsed}s)</span>;
+}
+
 function ImageToolPage() {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
@@ -64,6 +75,7 @@ function ImageToolPage() {
   const [generations, setGenerations] = useState<Generation[]>([]);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const generateStartRef = useRef<number>(0);
 
   useEffect(() => {
     // Clear stale generation state on mount - never auto-resume
@@ -126,6 +138,7 @@ function ImageToolPage() {
     }
 
     setIsGenerating(true);
+    generateStartRef.current = Date.now();
     setGeneratedImages([]);
     try {
       const { data: creditResult, error: creditError } = await supabase.rpc("consume_credits", { _tool: "image", _amount: CREDITS_PER_IMAGE });
@@ -151,7 +164,7 @@ function ImageToolPage() {
 
       pollingRef.current = setInterval(async () => {
         pollCount++;
-        if (pollCount > 40) {
+        if (pollCount > 60) {
           if (pollingRef.current) clearInterval(pollingRef.current);
           pollingRef.current = null;
           setIsGenerating(false);
@@ -188,7 +201,7 @@ function ImageToolPage() {
         } catch (e) {
           console.error("[image] Poll error:", e);
         }
-      }, 3000);
+      }, 4000);
     } catch (e: unknown) {
       setIsGenerating(false);
       toast.error(e instanceof Error ? e.message : "Generation failed");
@@ -311,7 +324,7 @@ function ImageToolPage() {
             <div className="mt-4 space-y-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
-                <span>Generating... (20-60s)</span>
+                <GeneratingStatus startTime={generateStartRef.current} />
               </div>
               <Progress value={undefined} className="h-2" />
             </div>

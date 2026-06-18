@@ -1,11 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Navbar } from "@/components/site/Navbar";
 import { Footer } from "@/components/site/Footer";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, ArrowRight, Loader as Loader2, Sparkles } from "lucide-react";
+import { Check, ArrowRight, Loader as Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/lib/auth";
 import { toast } from "sonner";
@@ -18,17 +18,19 @@ export const Route = createFileRoute("/pricing")({
   head: () => ({
     meta: [
       { title: "Pricing — Auto Seedance AI" },
-      { name: "description", content: "Simple credit-based pricing for AI image and video generation. Choose Basic, Standard, or Pro plans." },
+      { name: "description", content: "Simple credit-based pricing for AI image and video generation." },
     ],
   }),
 });
 
 function PricingPage() {
+  const navigate = useNavigate();
   const { user } = useSession();
   const [yearly, setYearly] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<string | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.from("plans")
@@ -36,10 +38,7 @@ function PricingPage() {
       .eq("is_active", true)
       .neq("name", "Free")
       .order("sort_order", { ascending: true })
-      .then(({ data }) => {
-        setPlans((data as Plan[]) ?? []);
-        setLoading(false);
-      });
+      .then(({ data }) => { setPlans((data as Plan[]) ?? []); setLoading(false); });
   }, []);
 
   useEffect(() => {
@@ -48,18 +47,36 @@ function PricingPage() {
       .then(({ data }) => { if (data) setCurrentPlan(data.plan); });
   }, [user]);
 
-  const handleSubscribe = (planName: string) => {
+  const handleSubscribe = async (plan: Plan) => {
     if (!user) {
-      toast.info("Please sign in to subscribe", { description: "Create an account or log in to get started." });
+      navigate({ to: "/login", search: { redirect: "/pricing" } as any });
       return;
     }
-    toast.info(`${planName} plan checkout`, {
-      description: "Payment integration coming soon. Contact support to upgrade.",
-    });
-  };
+    const priceMonthly = Number(plan.price_monthly ?? plan.price_monthly_cents / 100);
+    const priceYearly = Number(plan.price_yearly ?? plan.price_yearly_cents / 100);
+    const price = yearly ? priceYearly : priceMonthly;
+    const displayName = plan.display_name ?? plan.name;
 
-  // Map plan slug names to "popular" display
-  const popularSlug = "Pro"; // "Pro" plan (Standard display) is popular
+    setLoadingPlan(plan.name);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-paypal-order", {
+        body: { plan_name: displayName, price, user_id: user.id },
+      });
+
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+
+      if (data?.approval_url) {
+        window.location.href = data.approval_url;
+      } else {
+        throw new Error("No approval URL returned from PayPal");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to initialize payment");
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -70,7 +87,7 @@ function PricingPage() {
             <Badge variant="outline" className="border-border bg-muted/50">Pricing</Badge>
             <h1 className="mt-4 font-display text-5xl font-bold">Simple credit-based pricing</h1>
             <p className="mt-3 text-muted-foreground max-w-2xl mx-auto">
-              Choose a plan that fits your creative needs. All plans include image and video generation.
+              Pay once, create endlessly. All plans include image and video generation.
             </p>
 
             <div className="mt-8 inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 p-1">
@@ -100,13 +117,12 @@ function PricingPage() {
                 const priceMonthly = Number(plan.price_monthly ?? plan.price_monthly_cents / 100);
                 const priceYearly = Number(plan.price_yearly ?? plan.price_yearly_cents / 100);
                 const price = yearly ? priceYearly : priceMonthly;
-                const monthlyCredits = plan.monthly_credits;
-                const yearlyCredits = monthlyCredits * 12;
-                const credits = yearly ? yearlyCredits : monthlyCredits;
-                const pricePerCredit = price > 0 ? price / credits : 0;
-                const isPopular = plan.name === popularSlug;
+                const credits = yearly ? plan.monthly_credits * 12 : plan.monthly_credits;
+                const pricePerCredit = price > 0 && credits > 0 ? price / credits : 0;
+                const isPopular = plan.name === "Pro";
                 const isCurrent = currentPlan === plan.name.toLowerCase();
-                const displayName = plan.display_name || plan.name;
+                const displayName = plan.display_name ?? plan.name;
+                const isThisLoading = loadingPlan === plan.name;
 
                 return (
                   <Card
@@ -120,8 +136,8 @@ function PricingPage() {
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-display font-semibold text-xl">{displayName}</h3>
                       {pricePerCredit > 0 && (
-                        <Badge className="bg-green-500/20 text-green-400 border-green-500/30 border">
-                          ${pricePerCredit.toFixed(3)}/credit
+                        <Badge className="bg-green-500/20 text-green-400 border border-green-500/30 text-xs">
+                          ${pricePerCredit.toFixed(3)}/cr
                         </Badge>
                       )}
                     </div>
@@ -138,14 +154,12 @@ function PricingPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
-                      <Badge variant="outline" className="border-primary/30 text-primary">
-                        {credits.toLocaleString()} credits/{yearly ? "year" : "month"}
-                      </Badge>
-                    </div>
+                    <Badge variant="outline" className="w-fit border-primary/30 text-primary mb-6 text-sm">
+                      {credits.toLocaleString()} credits/{yearly ? "year" : "month"}
+                    </Badge>
 
                     <ul className="space-y-3 text-sm flex-1 mb-6">
-                      {((plan.features as string[]) || []).map((f) => (
+                      {((plan.features as string[]) ?? []).map((f) => (
                         <li key={f} className="flex gap-2">
                           <Check className="size-4 text-green-400 shrink-0 mt-0.5" />
                           {f}
@@ -154,16 +168,19 @@ function PricingPage() {
                     </ul>
 
                     {isCurrent ? (
-                      <Button className="w-full" variant="outline" disabled>
-                        Current plan
-                      </Button>
+                      <Button className="w-full" variant="outline" disabled>Current plan</Button>
                     ) : (
                       <Button
                         className={`w-full ${isPopular ? "btn-gradient text-white border-0" : ""}`}
                         variant={isPopular ? "default" : "outline"}
-                        onClick={() => handleSubscribe(displayName)}
+                        disabled={isThisLoading || !!loadingPlan}
+                        onClick={() => handleSubscribe(plan)}
                       >
-                        Subscribe <ArrowRight className="ml-1 size-4" />
+                        {isThisLoading ? (
+                          <><Loader2 className="size-4 mr-2 animate-spin" /> Redirecting to PayPal…</>
+                        ) : (
+                          <>Subscribe <ArrowRight className="ml-1 size-4" /></>
+                        )}
                       </Button>
                     )}
                   </Card>
@@ -172,16 +189,14 @@ function PricingPage() {
             </div>
           )}
 
-          <div className="mt-12 text-center">
-            <div className="text-sm text-muted-foreground">
-              Credit cost per generation: <span className="font-medium text-foreground">Image 5</span> · <span className="font-medium text-foreground">Video 30</span>
-            </div>
+          <div className="mt-8 text-center text-sm text-muted-foreground">
+            Secure payments via PayPal · Image 5 credits · Video 30 credits
           </div>
 
           <Card className="glass border-0 p-6 mt-8 max-w-2xl mx-auto">
-            <h3 className="font-display font-semibold">Need more credits or custom solutions?</h3>
+            <h3 className="font-display font-semibold">Need enterprise or custom credits?</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Contact us for enterprise plans, custom credit packages, or API access. We offer volume discounts for teams and agencies.
+              Contact us for volume discounts, custom packages, or API access.
             </p>
             <Link to="/contact" className="block mt-4">
               <Button variant="outline" className="w-full">
