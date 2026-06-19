@@ -37,6 +37,24 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Check if this order was already processed (duplicate protection)
+    const { data: existingPayment } = await supabase
+      .from("payments")
+      .select("id, status")
+      .eq("paypal_order_id", order_id)
+      .maybeSingle();
+
+    if (existingPayment?.status === "completed") {
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Payment already processed",
+        plan: null,
+        credits_added: 0,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Get PayPal access token
     const tokenRes = await fetch(`${BASE_URL}/v1/oauth2/token`, {
       method: "POST",
@@ -69,6 +87,16 @@ Deno.serve(async (req: Request) => {
 
     if (!captureRes.ok || captureData.status !== "COMPLETED") {
       console.error("PayPal capture failed:", captureData);
+      // Record failed payment attempt
+      await supabase.from("payments").insert({
+        user_id,
+        paypal_order_id: order_id,
+        amount: 0,
+        currency: "USD",
+        status: "failed",
+        plan_name: null,
+        credits_granted: 0,
+      });
       return new Response(JSON.stringify({ error: captureData.message || "Payment not completed" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -116,13 +144,23 @@ Deno.serve(async (req: Request) => {
         await supabase.from("credit_ledger").insert({
           user_id: resolvedUserId,
           amount: credits,
-          balance_after: newBalance,
+          reason: `${planName} plan purchase`,
+        });
+      } else {
+        // Create wallet if missing
+        await supabase.from("credit_wallets").insert({
+          user_id: resolvedUserId,
+          balance: credits,
+        });
+        await supabase.from("credit_ledger").insert({
+          user_id: resolvedUserId,
+          amount: credits,
           reason: `${planName} plan purchase`,
         });
       }
     }
 
-    // Record payment
+    // Record successful payment
     await supabase.from("payments").insert({
       user_id: resolvedUserId,
       paypal_order_id: order_id,
