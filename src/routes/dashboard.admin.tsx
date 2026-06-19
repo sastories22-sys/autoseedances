@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/lib/auth";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -214,7 +213,7 @@ function Admin() {
   }
 
   async function loadPlans() {
-    const [res] = await Promise.allSettled([supabase.from("plans").select("*").order("sort_order", { ascending: true })]);
+    const [res] = await Promise.allSettled([supabase.from("plans").select("*").order("price_monthly", { ascending: true })]);
     if (res.status === "fulfilled") setPlans((res.value.data ?? []) as Plan[]);
   }
 
@@ -299,15 +298,18 @@ function Admin() {
     if (campaignTo === "specific" && !specificEmail.trim()) { toast.error("Enter a recipient email"); return; }
     setSending(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-campaign-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ recipient_type: campaignTo, specific_email: campaignTo === "specific" ? specificEmail.trim() : undefined, subject, html_body: body, sent_by: user?.id }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Send failed");
-      toast.success(`Sent to ${json.sent_count} recipient(s)`);
+      const { data, error } = await supabase.functions.invoke('send-campaign-email', {
+        body: {
+          recipient_type: campaignTo,
+          specific_email: campaignTo === "specific" ? specificEmail.trim() : undefined,
+          subject,
+          html_body: body,
+          sent_by: user?.id
+        }
+      })
+      if (error) throw new Error(error.message)
+      if (data?.error) throw new Error(data.error)
+      toast.success(`Sent to ${data.sent_count} recipient(s)`)
       setSubject(""); setBody(""); setSpecificEmail("");
       loadCampaigns();
     } catch (err: any) {
@@ -359,8 +361,7 @@ function Admin() {
   }
 
   return (
-    <DashboardLayout>
-      <div className="p-6 md:p-10 max-w-7xl mx-auto">
+    <>
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -759,7 +760,6 @@ function Admin() {
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
 
       {/* ── Credits modal ── */}
       <Dialog open={!!creditModal} onOpenChange={open => !open && setCreditModal(null)}>
@@ -902,6 +902,6 @@ function Admin() {
             dangerouslySetInnerHTML={{ __html: body }} />
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </>
   );
 }
