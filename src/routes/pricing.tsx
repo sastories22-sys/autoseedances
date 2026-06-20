@@ -52,8 +52,8 @@ function PricingPage() {
       navigate({ to: "/login", search: { redirect: "/pricing" } as any });
       return;
     }
-    const priceMonthly = Number(plan.price_monthly ?? plan.price_monthly_cents / 100);
-    const priceYearly = Number(plan.price_yearly ?? plan.price_yearly_cents / 100);
+    const priceMonthly = Number(plan.price_monthly ?? 0);
+    const priceYearly = Number(plan.price_yearly ?? 0);
     const price = yearly ? priceYearly : priceMonthly;
     const displayName = plan.display_name ?? plan.name;
 
@@ -114,8 +114,8 @@ function PricingPage() {
           ) : (
             <div className="mt-12 grid md:grid-cols-3 gap-6">
               {plans.map((plan) => {
-                const priceMonthly = Number(plan.price_monthly ?? plan.price_monthly_cents / 100);
-                const priceYearly = Number(plan.price_yearly ?? plan.price_yearly_cents / 100);
+                const priceMonthly = Number(plan.price_monthly ?? 0);
+                const priceYearly = Number(plan.price_yearly ?? 0);
                 const price = yearly ? priceYearly : priceMonthly;
                 const credits = yearly ? plan.monthly_credits * 12 : plan.monthly_credits;
                 const pricePerCredit = price > 0 && credits > 0 ? price / credits : 0;

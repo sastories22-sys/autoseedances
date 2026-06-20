@@ -277,14 +277,14 @@ function Admin() {
     const priceMonthly = editingPlan._monthly ?? Number(editingPlan.price_monthly ?? 0);
     const priceYearly = editingPlan._yearly ?? Number(editingPlan.price_yearly ?? 0);
     const { error } = await supabase.from("plans").update({
+      name: editingPlan.name,
       display_name: editingPlan.display_name ?? editingPlan.name,
       price_monthly: priceMonthly,
       price_yearly: priceYearly,
-      price_monthly_cents: Math.round(priceMonthly * 100),
-      price_yearly_cents: Math.round(priceYearly * 100),
       monthly_credits: editingPlan.monthly_credits,
       features: editingPlan.features,
       is_active: editingPlan.is_active,
+      sort_order: editingPlan.sort_order,
     }).eq("id", editingPlan.id);
     if (error) {
       console.error("Save plan error:", error);

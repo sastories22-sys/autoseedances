@@ -128,35 +128,33 @@ export type Database = {
           name: string
           display_name: string | null
           monthly_credits: number
-          price_monthly_cents: number
-          price_yearly_cents: number
           price_monthly: number | null
           price_yearly: number | null
           features: string[]
           is_active: boolean
-          sort_order: number
+          sort_order: number | null
         }
         Insert: {
           id: string
           name: string
           display_name?: string | null
           monthly_credits: number
-          price_monthly_cents?: number
-          price_yearly_cents?: number
+          price_monthly?: number | null
+          price_yearly?: number | null
           features?: string[]
           is_active?: boolean
-          sort_order?: number
+          sort_order?: number | null
         }
         Update: {
           id?: string
           name?: string
           display_name?: string | null
           monthly_credits?: number
-          price_monthly_cents?: number
-          price_yearly_cents?: number
+          price_monthly?: number | null
+          price_yearly?: number | null
           features?: string[]
           is_active?: boolean
-          sort_order?: number
+          sort_order?: number | null
         }
         Relationships: []
       }
