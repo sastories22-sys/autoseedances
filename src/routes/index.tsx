@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Sparkles, Play, ArrowRight, Check, Image as ImageIcon, Video, Coins, Clock, Zap, ShieldCheck, Image as LucideImage } from "lucide-react";
+import { Sparkles, ArrowRight, Check, Image as ImageIcon, Video, Coins, Clock, Zap, ShieldCheck, Image as LucideImage } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -66,7 +66,6 @@ function Landing() {
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
       <Hero />
-      <VideoBanner />
       <Features />
       <StatsSection />
       <AIToolsSection />
@@ -124,16 +123,15 @@ function Hero() {
           transition={{ duration: 0.7, delay: 0.4 }}
           className="mt-16 mx-auto max-w-5xl"
         >
-          <div className="glass rounded-2xl p-2 glow-purple">
-            <div className="rounded-xl bg-[oklch(0.13_0.03_270)] aspect-[16/9] grid place-items-center relative overflow-hidden">
-              <div className="absolute inset-0 grid-bg opacity-60" />
-              <div className="relative text-center">
-                <div className="size-16 rounded-full btn-gradient grid place-items-center mx-auto glow-purple">
-                  <Play className="size-7 text-white ml-1" />
-                </div>
-                <p className="mt-4 text-sm text-muted-foreground">AI generation, running in seconds</p>
-              </div>
-            </div>
+          <div className="glass rounded-2xl p-2 glow-purple overflow-hidden">
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full rounded-xl aspect-[16/9] object-cover"
+              src="https://vcercajwtbjbvjhzivjb.supabase.co/storage/v1/object/sign/uploads/Untitled%20design.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV80ZTVlNzIxOC0yZGFlLTRhNTEtODRkNS0yN2JjNGI0MzQ5MTEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJ1cGxvYWRzL1VudGl0bGVkIGRlc2lnbi5tcDQiLCJzY29wZSI6ImRvd25sb2FkIiwiaWF0IjoxNzgxOTM1Mzg1LCJleHAiOjIwOTcyOTUzODV9.wKr8TxfhrTfRlUzrE2FAI6K9bmmz-5I-ut6i5qVXWtg"
+            />
           </div>
         </motion.div>
       </div>
@@ -354,21 +352,6 @@ function FAQ() {
           ))}
         </Accordion>
       </div>
-    </section>
-  );
-}
-
-function VideoBanner() {
-  return (
-    <section className="w-full max-w-5xl mx-auto px-4 my-12 rounded-2xl overflow-hidden shadow-2xl">
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="w-full rounded-2xl"
-        src="https://vcercajwtbjbvjhzivjb.supabase.co/storage/v1/object/sign/uploads/Untitled%20design.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV80ZTVlNzIxOC0yZGFlLTRhNTEtODRkNS0yN2JjNGI0MzQ5MTEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJ1cGxvYWRzL1VudGl0bGVkIGRlc2lnbi5tcDQiLCJzY29wZSI6ImRvd25sb2FkIiwiaWF0IjoxNzgxOTM1Mzg1LCJleHAiOjIwOTcyOTUzODV9.wKr8TxfhrTfRlUzrE2FAI6K9bmmz-5I-ut6i5qVXWtg"
-      />
     </section>
   );
 }
