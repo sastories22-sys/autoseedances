@@ -1,11 +1,55 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "content-type, authorization, x-client-info, apikey",
 };
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
+
+function getSupabaseClient(authHeader: string) {
+  const url = Deno.env.get("SUPABASE_URL") || Deno.env.get("VITE_SUPABASE_URL")!;
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY")!;
+  return createClient(url, key, {
+    global: { headers: { Authorization: authHeader } },
+  });
+}
+
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
+    const authHeader = req.headers.get("Authorization") || "";
+    const supabase = getSupabaseClient(authHeader);
+
+    // Get user from auth
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Not authenticated");
+
+    // Check admin status
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    const isAdmin = !!roleData;
+
+    // Only consume credits if not admin
+    if (!isAdmin) {
+      const { data: creditResult, error: creditError } = await supabase.rpc("consume_credits", {
+        _tool: "image",
+        _amount: 5,
+      });
+      if (creditError || !creditResult?.success) {
+        throw new Error(creditResult?.error || creditError?.message || "Failed to deduct credits");
+      }
+    }
+
     const FAL_API_KEY = Deno.env.get("FAL_API_KEY");
     if (!FAL_API_KEY) throw new Error("FAL_API_KEY missing");
     const body = await req.json();
@@ -59,7 +103,18 @@ Deno.serve(async (req) => {
     console.log("[generate-image] Submit response:", submitRes.status, submitText);
     if (!submitRes.ok) throw new Error(`Fal.ai submit error: ${submitRes.status} - ${submitText}`);
     const submitData = JSON.parse(submitText);
-    // fal.ai returns status_url and response_url in the submit response
+
+    // Insert generation record
+    await supabase.from("generations").insert({
+      user_id: user.id,
+      tool_type: "image",
+      prompt: prompt.trim(),
+      settings: { style, image_size, num_images, hasRef },
+      external_id: submitData.request_id,
+      status: "pending",
+      credits_used: isAdmin ? 0 : 5,
+    });
+
     return new Response(JSON.stringify({
       success: true,
       request_id: submitData.request_id,
@@ -67,6 +122,7 @@ Deno.serve(async (req) => {
       response_url: submitData.response_url,
       model_id: modelId,
       status: "queued",
+      is_admin: isAdmin,
     }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });

@@ -64,6 +64,7 @@ function GeneratingStatus({ startTime }: { startTime: number }) {
 function ImageToolPage() {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState("text");
   const [prompt, setPrompt] = useState("");
   const [selectedSize, setSelectedSize] = useState("auto_2K");
@@ -88,6 +89,9 @@ function ImageToolPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { navigate({ to: "/login", search: { redirect: "/tools/image" } as any, replace: true }); return; }
       setUserId(user.id);
+      // Check admin
+      supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle()
+        .then(({ data }) => setIsAdmin(!!data));
     });
   }, [navigate]);
 
@@ -130,18 +134,27 @@ function ImageToolPage() {
     if (!prompt.trim()) { toast.error("Please enter a prompt"); return; }
     if (!userId) { navigate({ to: "/login", replace: true }); return; }
 
-    const { data: wallet } = await supabase.from("credit_wallets").select("balance").eq("user_id", userId).maybeSingle();
-    if (wallet && wallet.balance < CREDITS_PER_IMAGE) {
-      toast.error("Insufficient credits", { action: { label: "Upgrade", onClick: () => window.location.href = "/pricing" } });
-      return;
+    // Admin check: skip credit checks
+    if (!isAdmin) {
+      const { data: wallet } = await supabase.from("credit_wallets").select("balance").eq("user_id", userId).maybeSingle();
+      if (wallet && wallet.balance < CREDITS_PER_IMAGE) {
+        toast.error("Insufficient credits", { action: { label: "Upgrade", onClick: () => window.location.href = "/pricing" } });
+        return;
+      }
     }
 
     setIsGenerating(true);
     generateStartRef.current = Date.now();
     setGeneratedImages([]);
     try {
-      const { data: creditResult, error: creditError } = await supabase.rpc("consume_credits", { _tool: "image", _amount: CREDITS_PER_IMAGE });
-      if (creditError || !creditResult?.success) throw new Error(creditResult?.error || creditError?.message || "Failed to deduct credits");
+      let creditResult: any = null;
+      if (!isAdmin) {
+        const { data, error: creditError } = await supabase.rpc("consume_credits", { _tool: "image", _amount: CREDITS_PER_IMAGE });
+        if (creditError || !data?.success) throw new Error(data?.error || creditError?.message || "Failed to deduct credits");
+        creditResult = data;
+      } else {
+        creditResult = { success: true, is_admin: true };
+      }
 
       const hasRef = activeTab === "reference" && referenceImages.length > 0;
       const { data, error } = await supabase.functions.invoke("generate-image", {

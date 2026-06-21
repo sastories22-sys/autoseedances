@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Coins, Image as ImageIcon, Video, Sparkles, ArrowRight, Zap, Loader as Loader2, TriangleAlert as AlertTriangle } from "lucide-react";
+import { Coins, Image as ImageIcon, Video, Sparkles, ArrowRight, Zap, Loader as Loader2, TriangleAlert as AlertTriangle, Crown } from "lucide-react";
 
 export const Route = createFileRoute("/dashboard/")({ component: OverviewWithBoundary });
 
@@ -57,6 +57,7 @@ function Overview() {
   const [subscription, setSubscription] = useState<{ plan: string } | null>(null);
   const [recentGenerations, setRecentGenerations] = useState<any[]>([]);
   const [stats, setStats] = useState({ images: 0, videos: 0, creditsUsed: 0 });
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -67,6 +68,10 @@ function Overview() {
 
   useEffect(() => {
     if (!user) return;
+
+    // Check admin
+    supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle()
+      .then(({ data }) => setIsAdmin(!!data));
 
     // All queries use Promise.allSettled so one failure never crashes the page
     Promise.allSettled([
@@ -157,6 +162,11 @@ function Overview() {
           <h1 className="font-display text-3xl font-bold">Welcome back, {displayName}!</h1>
           <p className="text-muted-foreground mt-1">Here's your creative overview.</p>
         </div>
+        {isAdmin && (
+          <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/30 hover:bg-amber-500/10">
+            <Crown className="size-3 mr-1" /> Admin Account - Unlimited Access
+          </Badge>
+        )}
       </header>
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -166,19 +176,25 @@ function Overview() {
             <Badge
               className={`${planName === "free" ? "bg-muted text-muted-foreground" : "btn-gradient text-white"} border-0`}
             >
-              {planDisplayName}
+              {isAdmin ? "Admin" : planDisplayName}
             </Badge>
           </div>
-          <div className="text-5xl font-display font-bold">{balance.toLocaleString()}</div>
-          <div className="text-sm text-muted-foreground mt-1">credits remaining</div>
-          <div className="mt-4">
-            <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-              <span>{Math.max(0, monthlyGrant - balance)} used</span>
-              <span>{monthlyGrant} total</span>
-            </div>
-            <Progress value={usedPercent} className="h-2" />
+          <div className="text-5xl font-display font-bold">
+            {isAdmin ? "∞" : balance.toLocaleString()}
           </div>
-          {planName === "free" && balance < 30 && (
+          <div className="text-sm text-muted-foreground mt-1">
+            {isAdmin ? "Unlimited credits" : "credits remaining"}
+          </div>
+          {!isAdmin && (
+            <div className="mt-4">
+              <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                <span>{Math.max(0, monthlyGrant - balance)} used</span>
+                <span>{monthlyGrant} total</span>
+              </div>
+              <Progress value={usedPercent} className="h-2" />
+            </div>
+          )}
+          {!isAdmin && planName === "free" && balance < 30 && (
             <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm">
               <span className="text-amber-400">Low credits!</span>{" "}
               <Link to="/pricing" className="text-primary hover:underline">
@@ -223,7 +239,9 @@ function Overview() {
                   Create 2K/4K AI images from text prompts
                 </p>
               </div>
-              <Badge className="btn-gradient text-white border-0">5 credits</Badge>
+              <Badge className="btn-gradient text-white border-0">
+                {isAdmin ? "Free" : "5 credits"}
+              </Badge>
             </div>
           </Card>
         </Link>
@@ -239,7 +257,9 @@ function Overview() {
                   Create cinematic AI videos with audio
                 </p>
               </div>
-              <Badge className="btn-gradient text-white border-0">30 credits</Badge>
+              <Badge className="btn-gradient text-white border-0">
+                {isAdmin ? "Free" : "30 credits"}
+              </Badge>
             </div>
           </Card>
         </Link>

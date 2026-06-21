@@ -2,7 +2,7 @@ import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-route
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureUserBootstrap, signOut, useSession } from "@/lib/auth";
-import { LayoutDashboard, Settings, Shield, Sparkles, LogOut, Loader as Loader2, CreditCard, User, Coins, Image as ImageIcon, Video, History } from "lucide-react";
+import { LayoutDashboard, Settings, Shield, Sparkles, LogOut, Loader as Loader2, CreditCard, User, Coins, Image as ImageIcon, Video, History, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -46,8 +46,8 @@ export function DashboardLayout({ children }: { children?: React.ReactNode }) {
           .select("role")
           .eq("user_id", user.id)
           .eq("role", "admin")
-          .single();
-        if (data) setIsAdmin(true);
+          .maybeSingle();
+        setIsAdmin(!!data);
       } catch {
         // not an admin — ignore the error
       }
@@ -98,13 +98,14 @@ export function DashboardLayout({ children }: { children?: React.ReactNode }) {
         {wallet && (
           <div className="mx-3 mb-3 rounded-xl border border-border bg-muted/30 p-4">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Coins className="size-3.5 text-primary" /> Credits
+              {isAdmin ? <Crown className="size-3.5 text-amber-500" /> : <Coins className="size-3.5 text-primary" />}
+              {isAdmin ? "Admin" : "Credits"}
             </div>
             <div className="mt-2 text-2xl font-display font-bold">
-              {wallet.balance.toLocaleString()}
+              {isAdmin ? "∞" : wallet.balance.toLocaleString()}
             </div>
             <div className="text-xs text-muted-foreground">
-              {wallet.monthly_grant.toLocaleString()} / month
+              {isAdmin ? "Unlimited access" : `${wallet.monthly_grant.toLocaleString()} / month`}
             </div>
           </div>
         )}

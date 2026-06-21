@@ -42,6 +42,7 @@ type Generation = Tables<"generations">;
 function VideoToolPage() {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState("text");
   const [prompt, setPrompt] = useState("");
   const [duration, setDuration] = useState(5);
@@ -69,6 +70,9 @@ function VideoToolPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { navigate({ to: "/login", search: { redirect: "/tools/video" } as any, replace: true }); return; }
       setUserId(user.id);
+      // Check admin
+      supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle()
+        .then(({ data }) => setIsAdmin(!!data));
     });
   }, [navigate]);
 
@@ -99,10 +103,13 @@ function VideoToolPage() {
     if (!prompt.trim()) { toast.error("Please enter a prompt"); return; }
     if (!userId) { navigate({ to: "/login", replace: true }); return; }
 
-    const { data: wallet } = await supabase.from("credit_wallets").select("balance").eq("user_id", userId).maybeSingle();
-    if (wallet && wallet.balance < CREDITS_PER_VIDEO) {
-      toast.error("Insufficient credits", { action: { label: "Upgrade", onClick: () => window.location.href = "/pricing" } });
-      return;
+    // Admin check: skip credit checks
+    if (!isAdmin) {
+      const { data: wallet } = await supabase.from("credit_wallets").select("balance").eq("user_id", userId).maybeSingle();
+      if (wallet && wallet.balance < CREDITS_PER_VIDEO) {
+        toast.error("Insufficient credits", { action: { label: "Upgrade", onClick: () => window.location.href = "/pricing" } });
+        return;
+      }
     }
 
     setIsGenerating(true);
@@ -110,8 +117,14 @@ function VideoToolPage() {
     setPollProgress(0);
 
     try {
-      const { data: creditResult, error: creditError } = await supabase.rpc("consume_credits", { _tool: "video", _amount: CREDITS_PER_VIDEO });
-      if (creditError || !creditResult?.success) throw new Error(creditResult?.error || creditError?.message || "Failed to deduct credits");
+      let creditResult: any = null;
+      if (!isAdmin) {
+        const { data, error: creditError } = await supabase.rpc("consume_credits", { _tool: "video", _amount: CREDITS_PER_VIDEO });
+        if (creditError || !data?.success) throw new Error(data?.error || creditError?.message || "Failed to deduct credits");
+        creditResult = data;
+      } else {
+        creditResult = { success: true, is_admin: true };
+      }
 
       const hasRef = activeTab === "reference";
       const { data, error } = await supabase.functions.invoke("generate-video", {

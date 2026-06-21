@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Sparkles, Coins, LogOut, User, Settings } from "lucide-react";
+import { ArrowLeft, Sparkles, Coins, LogOut, User, Settings, Crown } from "lucide-react";
 import { signOut } from "@/lib/auth";
 
 interface ToolNavbarProps {
@@ -22,6 +22,7 @@ interface ToolNavbarProps {
 export function ToolNavbar({ title }: ToolNavbarProps) {
   const { user } = useSession();
   const [balance, setBalance] = useState<number | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -31,6 +32,13 @@ export function ToolNavbar({ title }: ToolNavbarProps) {
       .eq("user_id", user.id)
       .maybeSingle()
       .then(({ data }) => setBalance(data?.balance ?? 0));
+    supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle()
+      .then(({ data }) => setIsAdmin(!!data));
   }, [user]);
 
   const initials = user?.email?.[0]?.toUpperCase() || "U";
@@ -55,9 +63,9 @@ export function ToolNavbar({ title }: ToolNavbarProps) {
         <div className="flex items-center gap-4">
           {balance !== null && (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border">
-              <Coins className="size-4 text-primary" />
-              <span className="font-semibold">{balance}</span>
-              <span className="text-xs text-muted-foreground">credits</span>
+              {isAdmin ? <Crown className="size-4 text-amber-500" /> : <Coins className="size-4 text-primary" />}
+              <span className="font-semibold">{isAdmin ? "∞" : balance}</span>
+              <span className="text-xs text-muted-foreground">{isAdmin ? "Unlimited" : "credits"}</span>
             </div>
           )}
 
