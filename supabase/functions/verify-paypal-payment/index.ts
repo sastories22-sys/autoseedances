@@ -130,33 +130,19 @@ Deno.serve(async (req: Request) => {
       current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     }, { onConflict: "user_id" });
 
-    // Grant credits via wallet update + ledger
+    // Grant credits via new transaction system (add_credits)
     if (credits > 0) {
-      const { data: wallet } = await supabase
-        .from("credit_wallets")
-        .select("balance")
-        .eq("user_id", resolvedUserId)
-        .maybeSingle();
-
-      if (wallet) {
-        const newBalance = wallet.balance + credits;
-        await supabase.from("credit_wallets").update({ balance: newBalance }).eq("user_id", resolvedUserId);
-        await supabase.from("credit_ledger").insert({
-          user_id: resolvedUserId,
-          amount: credits,
-          reason: `${planName} plan purchase`,
-        });
+      const { data: creditData, error: creditError } = await supabase.rpc("add_credits", {
+        _user_id: resolvedUserId,
+        _amount: credits,
+        _reason: `${planName} plan purchase`,
+        _reference_id: null,
+        _metadata: { source: "paypal", order_id: order_id },
+      });
+      if (creditError) {
+        console.error("add_credits error:", creditError);
       } else {
-        // Create wallet if missing
-        await supabase.from("credit_wallets").insert({
-          user_id: resolvedUserId,
-          balance: credits,
-        });
-        await supabase.from("credit_ledger").insert({
-          user_id: resolvedUserId,
-          amount: credits,
-          reason: `${planName} plan purchase`,
-        });
+        console.log("add_credits result:", creditData);
       }
     }
 

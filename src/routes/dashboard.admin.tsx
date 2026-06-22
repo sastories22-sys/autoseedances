@@ -235,25 +235,21 @@ function Admin() {
     if (!creditModal) return;
     const amount = parseInt(creditAmount, 10);
     if (isNaN(amount) || amount <= 0) { toast.error("Enter a valid amount"); return; }
-    const delta = creditModal.mode === "remove" ? -amount : amount;
     const uid = creditModal.row.id;
+    const reason = creditReason.trim() || (creditModal.mode === "add" ? "Admin credit grant" : "Admin credit removal");
 
-    const [walletRes] = await Promise.allSettled([
-      supabase.from("credit_wallets").select("balance").eq("user_id", uid).maybeSingle(),
-    ]);
-    if (walletRes.status !== "fulfilled" || !walletRes.value.data) { toast.error("Wallet not found"); return; }
+    const { data, error } = await supabase.rpc(
+      creditModal.mode === "add" ? "add_credits" : "deduct_credits",
+      {
+        _user_id: uid,
+        _amount: amount,
+        _reason: reason,
+      }
+    );
 
-    const newBalance = Math.max(0, walletRes.value.data.balance + delta);
-    const [updateRes, ledgerRes] = await Promise.allSettled([
-      supabase.from("credit_wallets").update({ balance: newBalance }).eq("user_id", uid),
-      supabase.from("credit_ledger").insert({
-        user_id: uid, amount: delta, balance_after: newBalance,
-        reason: creditReason.trim() || (creditModal.mode === "add" ? "Admin credit grant" : "Admin credit removal"),
-      }),
-    ]);
-
-    if (updateRes.status === "rejected" || ledgerRes.status === "rejected") {
-      toast.error("Failed to update credits"); return;
+    if (error || !data?.success) {
+      toast.error(error?.message || data?.error || "Failed to update credits");
+      return;
     }
     toast.success(`${creditModal.mode === "add" ? "Added" : "Removed"} ${amount} credits`);
     setCreditModal(null); setCreditAmount(""); setCreditReason("");
