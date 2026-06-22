@@ -15,7 +15,7 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
   head: () => ({
     meta: [
-      { title: "Login — Auto Seedance" },
+      { title: "Login | Auto Seedance AI Generator" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),

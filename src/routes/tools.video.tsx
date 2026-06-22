@@ -20,8 +20,9 @@ export const Route = createFileRoute("/tools/video")({
   component: VideoToolPage,
   head: () => ({
     meta: [
-      { title: "Video Generation — Auto Seedance AI" },
-      { name: "description", content: "Generate AI videos with text prompts. 30 credits per video." },
+      { title: "AI Video Generator - Text to Video Free | Auto Seedance" },
+      { name: "description", content: "Free AI video generator powered by Seedance 2.0. Create cinematic videos with audio from text prompts. 720p and 1080p. Reference to video. 30 credits per video." },
+      { name: "keywords", content: "AI video generator, text to video, free AI video, cinematic video AI, Seedance AI, video from text, AI video maker" },
     ],
   }),
 });
