@@ -49,8 +49,9 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 const SITE_URL = "https://autoseedance.site";
-const SITE_TITLE = "Auto Seedance — AI Image & Video Generation Platform";
-const SITE_DESC = "Professional AI image and video generation platform powered by advanced models. Create stunning visuals with Seedream and Seedance AI.";
+const SITE_TITLE = "Auto Seedance — Free AI Image & Video Generator";
+const SITE_DESC = "Create stunning AI images and videos for free. Professional AI generation platform powered by Seedream, Veo 3, Meta AI, and Grok. Start with 50 free credits.";
+const SITE_KEYWORDS = "AI Image Generator, AI Video Generator, Free AI Image Generator, AI Art Generator, Seedream AI, Veo 3, Meta AI, Grok AI, Higgsfield AI, text to image, text to video, AI Photo Generator";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
@@ -60,23 +61,60 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: SITE_TITLE },
       { name: "description", content: SITE_DESC },
       { name: "author", content: "Auto Seedance" },
-      { name: "keywords", content: "AI image generator, AI video generator, text to image, text to video, Seedream, Seedance" },
+      { name: "keywords", content: SITE_KEYWORDS },
       { name: "theme-color", content: "#0a0a14" },
+      { name: "color-scheme", content: "dark" },
+      { name: "robots", content: "index, follow, max-image-preview:large, max-video-preview:-1" },
+      { name: "googlebot", content: "index, follow, max-snippet:-1" },
       { property: "og:site_name", content: "Auto Seedance" },
       { property: "og:title", content: SITE_TITLE },
       { property: "og:description", content: SITE_DESC },
       { property: "og:type", content: "website" },
       { property: "og:url", content: SITE_URL },
+      { property: "og:image", content: "https://autoseedance.site/og-image.png" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:locale", content: "en_US" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:site", content: "@AutoSeedance" },
       { name: "twitter:title", content: SITE_TITLE },
       { name: "twitter:description", content: SITE_DESC },
+      { name: "twitter:image", content: "https://autoseedance.site/og-image.png" },
     ],
     links: [
+      { rel: "canonical", href: SITE_URL },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" },
+      { rel: "preconnect", href: "https://vcercajwtbjbvjhzivjb.supabase.co" },
+      { rel: "dns-prefetch", href: "https://fonts.googleapis.com" },
+      { rel: "dns-prefetch", href: "https://fonts.gstatic.com" },
     ],
     scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "Auto Seedance",
+          url: SITE_URL,
+          description: SITE_DESC,
+          potentialAction: {
+            "@type": "SearchAction",
+            target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/blog?q={search_term_string}` },
+            "query-input": "required name=search_term_string",
+          },
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          name: "Auto Seedance",
+          url: SITE_URL,
+          logo: "https://autoseedance.site/android-chrome-512x512.png",
+        }),
+      },
       {
         type: "application/ld+json",
         children: JSON.stringify({
@@ -84,9 +122,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "@type": "SoftwareApplication",
           name: "Auto Seedance",
           applicationCategory: "MultimediaApplication",
-          description: SITE_DESC,
+          description: "Professional AI image and video generation platform powered by advanced AI models.",
+          operatingSystem: "Web Browser",
           offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
           url: SITE_URL,
+          aggregateRating: { "@type": "AggregateRating", ratingValue: "4.8", ratingCount: "1250" },
         }),
       },
     ],

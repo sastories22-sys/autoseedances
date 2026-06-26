@@ -6,13 +6,33 @@ export const Route = createFileRoute("/terms")({
   component: TermsPage,
   head: () => ({
     meta: [
-      { title: "Terms of Service — Auto Seedance" },
-      { name: "description", content: "The terms governing your use of the Auto Seedance browser extension and dashboard." },
+      { title: "Terms of Service — User Agreement | Auto Seedance" },
+      { name: "description", content: "Auto Seedance terms of service: Fair usage policies, account responsibilities, and legal terms for our AI image and video generation platform. Read our user agreement and service terms." },
+      { name: "keywords", content: "Auto Seedance terms, terms of service, AI platform terms, user agreement, service terms" },
+      { name: "robots", content: "index, follow" },
       { property: "og:title", content: "Terms of Service — Auto Seedance" },
-      { property: "og:description", content: "Terms governing your use of Auto Seedance." },
+      { property: "og:description", content: "Terms governing your use of Auto Seedance AI image and video generation platform." },
       { property: "og:url", content: "https://autoseedance.site/terms" },
+      { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://autoseedance.site/og-image.png" },
+      { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "Terms of Service — Auto Seedance" },
+      { name: "twitter:description", content: "Terms governing your use of Auto Seedance." },
     ],
     links: [{ rel: "canonical", href: "https://autoseedance.site/terms" }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: "https://autoseedance.site/" },
+            { "@type": "ListItem", position: 2, name: "Terms of Service", item: "https://autoseedance.site/terms" },
+          ],
+        }),
+      },
+    ],
   }),
 });
 

@@ -9,13 +9,43 @@ export const Route = createFileRoute("/contact")({
   component: ContactPage,
   head: () => ({
     meta: [
-      { title: "Contact — Auto Seedance" },
-      { name: "description", content: "Get in touch with the Auto Seedance team for support, feedback, or partnership inquiries." },
-      { property: "og:title", content: "Contact — Auto Seedance" },
-      { property: "og:description", content: "Get in touch with the Auto Seedance team." },
+      { title: "Contact Us — Support & Partnership Inquiries | Auto Seedance" },
+      { name: "description", content: "Get in touch with the Auto Seedance team for support, feedback, bug reports, or partnership inquiries. We respond within 24 hours. Contact us about AI image and video generation." },
+      { name: "keywords", content: "contact Auto Seedance, AI generation support, AI tool feedback, AI partnership, AI tool help" },
+      { name: "robots", content: "index, follow" },
+      { property: "og:title", content: "Contact Us — Auto Seedance" },
+      { property: "og:description", content: "Get in touch with the Auto Seedance team for support, feedback, or partnership inquiries." },
       { property: "og:url", content: "https://autoseedance.site/contact" },
+      { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://autoseedance.site/og-image.png" },
+      { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "Contact Us — Auto Seedance" },
+      { name: "twitter:description", content: "Get in touch with the Auto Seedance team." },
     ],
     links: [{ rel: "canonical", href: "https://autoseedance.site/contact" }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "ContactPage",
+          name: "Contact Auto Seedance",
+          description: "Contact page for Auto Seedance AI image and video generation platform.",
+          url: "https://autoseedance.site/contact",
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: "https://autoseedance.site/" },
+            { "@type": "ListItem", position: 2, name: "Contact", item: "https://autoseedance.site/contact" },
+          ],
+        }),
+      },
+    ],
   }),
 });
 

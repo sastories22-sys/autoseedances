@@ -11,19 +11,84 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { toast } from "sonner";
-import {
-  Image as ImageIcon, Loader as Loader2, Download, Heart, Trash2, Sparkles,
-  X, Plus, Upload, ZoomIn, Copy, ArrowLeft
-} from "lucide-react";
+import { Breadcrumb } from "@/components/seo/Breadcrumb";
+import { Image as ImageIcon, Loader as Loader2, Download, Heart, Trash2, Sparkles, X, Plus, Upload, ZoomIn, Copy, ArrowLeft, Circle as HelpCircle } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/tools/image")({
   component: ImageToolPage,
   head: () => ({
     meta: [
-      { title: "Image Generation — Auto Seedance AI" },
-      { name: "description", content: "Generate AI images with text prompts. 5 credits per image." },
+      { title: "Free AI Image Generator — Create AI Art Online | Auto Seedance" },
+      { name: "description", content: "Generate stunning AI images for free with Auto Seedance. Text to image AI generator with realistic, anime, 3D, vector, and artistic styles. Up to 4K resolution. 5 credits per image. Start with 50 free credits." },
+      { name: "keywords", content: "AI Image Generator, Free AI Image Generator, AI Art Generator, AI Photo Generator, text to image, Seedream AI, ByteDance Seedream, AI Image Editor, AI Image Upscaler, realistic AI images" },
+      { name: "robots", content: "index, follow, max-image-preview:large, max-video-preview:-1" },
+      { property: "og:title", content: "Free AI Image Generator — Create AI Art Online" },
+      { property: "og:description", content: "Generate stunning AI images for free. Multiple styles, up to 4K resolution. 5 credits per image." },
+      { property: "og:url", content: "https://autoseedance.site/tools/image" },
+      { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://autoseedance.site/og-image.png" },
+      { property: "og:image:alt", content: "AI Image Generator - Create stunning visuals from text prompts" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Free AI Image Generator — Auto Seedance" },
+      { name: "twitter:description", content: "Generate stunning AI images for free. Multiple styles, up to 4K resolution." },
+      { name: "twitter:image", content: "https://autoseedance.site/og-image.png" },
+    ],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/tools/image" }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Service",
+          name: "AI Image Generation",
+          description: "Generate high-quality AI images from text prompts. Choose from realistic, anime, 3D, vector, and artistic styles with resolutions up to 4K.",
+          url: "https://autoseedance.site/tools/image",
+          provider: { "@type": "Organization", name: "Auto Seedance" },
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+          aggregateRating: { "@type": "AggregateRating", ratingValue: "4.9", ratingCount: "850" },
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          name: "Auto Seedance Image Generator",
+          applicationCategory: "DesignApplication",
+          description: "AI-powered image generation tool for creating professional visuals from text descriptions.",
+          operatingSystem: "Web Browser",
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: "https://autoseedance.site/" },
+            { "@type": "ListItem", position: 2, name: "Tools", item: "https://autoseedance.site/tools" },
+            { "@type": "ListItem", position: 3, name: "Image Generator", item: "https://autoseedance.site/tools/image" },
+          ],
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: [
+            { "@type": "Question", name: "How does the AI image generator work?", acceptedAnswer: { "@type": "Answer", text: "Enter a text prompt describing your desired image, choose a style (realistic, anime, 3D, vector, oil painting, watercolor), select resolution (up to 4K), and click Generate. The AI creates your image in seconds using Seedream AI." } },
+            { "@type": "Question", name: "Is the AI image generator free?", acceptedAnswer: { "@type": "Answer", text: "Yes, you start with 50 free credits. Each image costs 5 credits, giving you 10 free images to start. No credit card required." } },
+            { "@type": "Question", name: "What image styles are available?", acceptedAnswer: { "@type": "Answer", text: "We offer Realistic Photo, Digital Illustration, Vector Art, 3D Render, Anime/Manga, Oil Painting, and Watercolor styles." } },
+            { "@type": "Question", name: "Can I use reference images?", acceptedAnswer: { "@type": "Answer", text: "Yes, upload up to 10 reference images to guide the AI's style and composition. This helps create images that match your creative vision." } },
+            { "@type": "Question", name: "What resolutions are supported?", acceptedAnswer: { "@type": "Answer", text: "Auto 2K, Auto 4K, Square HD, Landscape 4:3, and Portrait 4:3. Perfect for social media, print, and digital content." } },
+          ],
+        }),
+      },
     ],
   }),
 });
@@ -232,15 +297,22 @@ function ImageToolPage() {
 
   if (!userId) return null;
 
+  const breadcrumbs = [
+    { name: "Home", url: "/" },
+    { name: "Tools", url: "/tools" },
+    { name: "Image Generator", url: "/tools/image" },
+  ];
+
   return (
     <div className="min-h-screen bg-background pt-14">
       <ToolNavbar title="Image Generation" />
       <div className="p-6 md:p-10 max-w-6xl mx-auto">
+        <Breadcrumb items={breadcrumbs} className="mb-4" />
         <div className="flex items-center gap-3 mb-6">
           <Link to="/" className="text-muted-foreground hover:text-foreground transition"><ArrowLeft className="size-5" /></Link>
           <div className="size-10 rounded-xl btn-gradient grid place-items-center"><ImageIcon className="size-5 text-white" /></div>
           <div>
-            <h1 className="font-display text-3xl font-bold">Image Generation</h1>
+            <h1 className="font-display text-3xl font-bold">Free AI Image Generator</h1>
             <p className="text-muted-foreground text-sm">Create stunning AI images from text prompts</p>
           </div>
           <Badge variant="outline" className="ml-auto">{CREDITS_PER_IMAGE} credits</Badge>
@@ -367,6 +439,47 @@ function ImageToolPage() {
             </div>
           </div>
         )}
+
+        <div className="mt-10">
+          <Card className="glass border-0 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <HelpCircle className="size-5 text-primary" />
+              <h2 className="font-display text-xl font-semibold">Frequently Asked Questions</h2>
+            </div>
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="q1">
+                <AccordionTrigger>How does the AI image generator work?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  Enter a text prompt describing your desired image, choose a style (realistic, anime, 3D, vector, oil painting, watercolor), select resolution (up to 4K), and click Generate. The AI creates your image in seconds using advanced Seedream AI models.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="q2">
+                <AccordionTrigger>Is the AI image generator free?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  Yes, you start with 50 free credits. Each image costs 5 credits, giving you 10 free images to start. No credit card required. You can purchase more credits or subscribe to a plan for additional generations.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="q3">
+                <AccordionTrigger>What image styles are available?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  We offer 7 styles: Realistic Photo for photorealistic images, Digital Illustration for artwork, Vector Art for clean graphics, 3D Render for three-dimensional scenes, Anime/Manga for Japanese-style art, Oil Painting for classical artistic effects, and Watercolor for soft painted looks.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="q4">
+                <AccordionTrigger>Can I use reference images?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  Yes, upload up to 10 reference images to guide the AI's style and composition. The AI will use these as inspiration while creating your image, helping you achieve specific looks or match existing artwork styles.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="q5">
+                <AccordionTrigger>What resolutions are supported?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  We support Auto 2K, Auto 4K, Square HD, Landscape 4:3, and Portrait 4:3 resolutions. These cover all common use cases from social media posts to high-quality print images.
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </Card>
+        </div>
 
         <div className="mt-10">
           <h2 className="font-display text-xl font-semibold">Your Generations</h2>

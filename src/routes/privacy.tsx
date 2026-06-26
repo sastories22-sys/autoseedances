@@ -6,13 +6,33 @@ export const Route = createFileRoute("/privacy")({
   component: PrivacyPage,
   head: () => ({
     meta: [
-      { title: "Privacy Policy — Auto Seedance" },
-      { name: "description", content: "How Auto Seedance handles your data: no selling of personal information, no password collection, local browser storage, and minimal permissions." },
+      { title: "Privacy Policy — Data Protection & User Privacy | Auto Seedance" },
+      { name: "description", content: "Auto Seedance privacy policy: We never sell your data, collect passwords, or share personal information. Learn how we protect your privacy with encryption, local storage, and minimal data collection." },
+      { name: "keywords", content: "Auto Seedance privacy, data protection, AI privacy policy, user data security, privacy policy" },
+      { name: "robots", content: "index, follow" },
       { property: "og:title", content: "Privacy Policy — Auto Seedance" },
-      { property: "og:description", content: "Read how Auto Seedance respects your privacy." },
+      { property: "og:description", content: "Read how Auto Seedance respects your privacy and protects your data." },
       { property: "og:url", content: "https://autoseedance.site/privacy" },
+      { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://autoseedance.site/og-image.png" },
+      { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "Privacy Policy — Auto Seedance" },
+      { name: "twitter:description", content: "Learn how Auto Seedance respects your privacy." },
     ],
     links: [{ rel: "canonical", href: "https://autoseedance.site/privacy" }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: "https://autoseedance.site/" },
+            { "@type": "ListItem", position: 2, name: "Privacy Policy", item: "https://autoseedance.site/privacy" },
+          ],
+        }),
+      },
+    ],
   }),
 });
 

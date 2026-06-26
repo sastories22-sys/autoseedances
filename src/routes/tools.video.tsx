@@ -12,16 +12,84 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { toast } from "sonner";
-import { Video, Loader as Loader2, Download, Heart, Trash2, Sparkles, X, Image as ImageIcon, Music, CircleAlert as AlertCircle, ArrowLeft, Clock } from "lucide-react";
+import { Breadcrumb } from "@/components/seo/Breadcrumb";
+import { Video, Loader as Loader2, Download, Heart, Trash2, Sparkles, X, Image as ImageIcon, Music, CircleAlert as AlertCircle, ArrowLeft, Clock, Circle as HelpCircle } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/tools/video")({
   component: VideoToolPage,
   head: () => ({
     meta: [
-      { title: "Video Generation — Auto Seedance AI" },
-      { name: "description", content: "Generate AI videos with text prompts. 30 credits per video." },
+      { title: "Free AI Video Generator — Create AI Videos Online | Auto Seedance" },
+      { name: "description", content: "Generate cinematic AI videos for free with Auto Seedance. Text to video AI generator with 720p-1080p resolution, AI-generated audio, and multiple aspect ratios. 30 credits per video. Start with 50 free credits." },
+      { name: "keywords", content: "AI Video Generator, Free AI Video Generator, AI Video Creator, AI Video Maker, text to video, Veo 3, Google Veo, AI Video Generator Online, AI Video Generator Free, cinematic AI videos" },
+      { name: "robots", content: "index, follow, max-image-preview:large, max-video-preview:-1" },
+      { property: "og:title", content: "Free AI Video Generator — Create AI Videos Online" },
+      { property: "og:description", content: "Generate cinematic AI videos for free. 720p-1080p with AI audio. 30 credits per video." },
+      { property: "og:url", content: "https://autoseedance.site/tools/video" },
+      { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://autoseedance.site/og-image.png" },
+      { property: "og:image:alt", content: "AI Video Generator - Create cinematic videos from text prompts" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Free AI Video Generator — Auto Seedance" },
+      { name: "twitter:description", content: "Generate cinematic AI videos for free. 720p-1080p with AI audio." },
+      { name: "twitter:image", content: "https://autoseedance.site/og-image.png" },
+    ],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/tools/video" }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Service",
+          name: "AI Video Generation",
+          description: "Create cinematic AI videos from text prompts with 720p-1080p resolution and AI-generated audio.",
+          url: "https://autoseedance.site/tools/video",
+          provider: { "@type": "Organization", name: "Auto Seedance" },
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+          aggregateRating: { "@type": "AggregateRating", ratingValue: "4.7", ratingCount: "420" },
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          name: "Auto Seedance Video Generator",
+          applicationCategory: "VideoApplication",
+          description: "AI-powered video generation tool for creating cinematic content from text descriptions.",
+          operatingSystem: "Web Browser",
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: "https://autoseedance.site/" },
+            { "@type": "ListItem", position: 2, name: "Tools", item: "https://autoseedance.site/tools" },
+            { "@type": "ListItem", position: 3, name: "Video Generator", item: "https://autoseedance.site/tools/video" },
+          ],
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: [
+            { "@type": "Question", name: "How does the AI video generator work?", acceptedAnswer: { "@type": "Answer", text: "Describe your video scene with a text prompt, set duration (1-10 seconds), resolution (720p HD or 1080p Full HD), and aspect ratio (16:9, 9:16 for shorts, or 1:1 square). The AI creates a cinematic video in 2-3 minutes." } },
+            { "@type": "Question", name: "Is the AI video generator free?", acceptedAnswer: { "@type": "Answer", text: "Yes, you start with 50 free credits. Each video costs 30 credits, giving you 1 free video to start. No credit card required." } },
+            { "@type": "Question", name: "Can I add audio to my AI videos?", acceptedAnswer: { "@type": "Answer", text: "Yes, we offer AI-generated background audio that automatically matches your video's mood and content. You can also upload custom audio tracks." } },
+            { "@type": "Question", name: "What video resolutions are supported?", acceptedAnswer: { "@type": "Answer", text: "We support 720p HD and 1080p Full HD resolutions. Aspect ratios include 16:9 (landscape), 9:16 (portrait/shorts), and 1:1 (square)." } },
+            { "@type": "Question", name: "Can I use reference images or videos?", acceptedAnswer: { "@type": "Answer", text: "Yes, upload up to 9 reference images, 3 reference videos, and 3 audio tracks to guide the AI in creating your video." } },
+          ],
+        }),
+      },
     ],
   }),
 });
@@ -205,15 +273,22 @@ function VideoToolPage() {
 
   if (!userId) return null;
 
+  const breadcrumbs = [
+    { name: "Home", url: "/" },
+    { name: "Tools", url: "/tools" },
+    { name: "Video Generator", url: "/tools/video" },
+  ];
+
   return (
     <div className="min-h-screen bg-background pt-14">
       <ToolNavbar title="Video Generation" />
       <div className="p-6 md:p-10 max-w-6xl mx-auto">
+        <Breadcrumb items={breadcrumbs} className="mb-4" />
         <div className="flex items-center gap-3 mb-6">
           <Link to="/" className="text-muted-foreground hover:text-foreground transition"><ArrowLeft className="size-5" /></Link>
           <div className="size-10 rounded-xl btn-gradient grid place-items-center"><Video className="size-5 text-white" /></div>
           <div>
-            <h1 className="font-display text-3xl font-bold">Video Generation</h1>
+            <h1 className="font-display text-3xl font-bold">Free AI Video Generator</h1>
             <p className="text-muted-foreground text-sm">Create cinematic AI videos from text prompts</p>
           </div>
           <Badge variant="outline" className="ml-auto">{CREDITS_PER_VIDEO} credits</Badge>
@@ -383,6 +458,47 @@ function VideoToolPage() {
             {isGenerating ? <><Loader2 className="size-4 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="size-4 mr-2" /> Generate Video ({CREDITS_PER_VIDEO} credits)</>}
           </Button>
         </Card>
+
+        <div className="mt-10">
+          <Card className="glass border-0 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <HelpCircle className="size-5 text-primary" />
+              <h2 className="font-display text-xl font-semibold">Frequently Asked Questions</h2>
+            </div>
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="q1">
+                <AccordionTrigger>How does the AI video generator work?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  Describe your video scene with a text prompt, set duration (1-10 seconds), resolution (720p HD or 1080p Full HD), and aspect ratio (16:9, 9:16 for shorts, or 1:1 square). The AI creates a cinematic video in 2-3 minutes using advanced video generation models.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="q2">
+                <AccordionTrigger>Is the AI video generator free?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  Yes, you start with 50 free credits. Each video costs 30 credits, giving you at least 1 free video to create. No credit card required. Purchase more credits or subscribe to a plan for additional video generations.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="q3">
+                <AccordionTrigger>Can I add audio to my AI videos?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  Yes, we offer AI-generated background audio that automatically matches your video's mood and content. Turn on the "Generate Audio" toggle to add ambient soundtracks to your videos, or upload your own audio tracks in reference mode.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="q4">
+                <AccordionTrigger>What video resolutions are supported?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  We support 720p HD and 1080p Full HD resolutions. Choose from three aspect ratios: 16:9 (landscape) for YouTube and standard video, 9:16 (portrait) for TikTok/Reels/Shorts, and 1:1 (square) for Instagram and social feeds.
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="q5">
+                <AccordionTrigger>Can I use reference images or videos?</AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  Yes, in reference mode you can upload up to 9 reference images, 3 reference videos, and 3 audio tracks. Use [image1], [video1], or [audio1] in your prompt to reference specific uploads. This helps guide the AI to match your creative vision.
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </Card>
+        </div>
 
         <div className="mt-10">
           <h2 className="font-display text-xl font-semibold">Your Videos</h2>

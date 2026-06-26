@@ -14,9 +14,13 @@ export const Route = createFileRoute("/forgot-password")({
   component: ForgotPasswordPage,
   head: () => ({
     meta: [
-      { title: "Forgot Password — Auto Seedance" },
+      { title: "Forgot Password — Reset Your Password | Auto Seedance" },
+      { name: "description", content: "Reset your Auto Seedance password. Enter your email to receive a password reset link and regain access to your AI generation dashboard." },
       { name: "robots", content: "noindex, nofollow" },
+      { property: "og:title", content: "Forgot Password — Auto Seedance" },
+      { property: "og:description", content: "Reset your password to regain access to your account." },
     ],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/forgot-password" }],
   }),
 });
 

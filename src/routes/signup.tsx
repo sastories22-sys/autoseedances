@@ -16,9 +16,13 @@ export const Route = createFileRoute("/signup")({
   component: SignupPage,
   head: () => ({
     meta: [
-      { title: "Sign Up — Auto Seedance" },
+      { title: "Create Free Account — Start AI Image & Video Generation | Auto Seedance" },
+      { name: "description", content: "Create your free Auto Seedance account. Get 50 free credits to start generating AI images and videos. No credit card required. Start creating with AI today." },
       { name: "robots", content: "noindex, nofollow" },
+      { property: "og:title", content: "Sign Up — Auto Seedance" },
+      { property: "og:description", content: "Create your free account and start generating AI images and videos." },
     ],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/signup" }],
   }),
 });
 

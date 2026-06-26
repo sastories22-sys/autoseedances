@@ -11,18 +11,53 @@ const SITE_URL = "https://autoseedance.site";
 export const Route = createFileRoute("/blog/")({
   head: () => ({
     meta: [
-      { title: "Blog — Auto Seedance | AI Automation Tutorials & Guides" },
+      { title: "Blog — AI Image & Video Generation Tutorials | Auto Seedance" },
       {
         name: "description",
         content:
-          "Tutorials, prompt guides, tool reviews, and case studies for AI image and video automation with Auto Seedance.",
+          "Learn AI image and video generation with tutorials, prompt guides, tool reviews, and case studies. Master Seedream AI, Veo 3, Meta AI, Grok AI, and more. Tips for creating stunning AI visuals.",
       },
-      { property: "og:title", content: "Auto Seedance Blog" },
-      { property: "og:description", content: "Tutorials, prompt guides, and tool reviews for AI automation." },
+      { name: "keywords", content: "AI tutorials, AI prompt guides, Seedream tutorial, Veo 3 guide, AI generation tips, prompt engineering, AI image tips, AI video tips, Meta AI, Grok AI" },
+      { name: "robots", content: "index, follow, max-image-preview:large" },
+      { property: "og:title", content: "Auto Seedance Blog — AI Image & Video Tutorials" },
+      { property: "og:description", content: "Tutorials, prompt guides, and tool reviews for AI image and video generation. Learn to create stunning visuals with AI." },
       { property: "og:url", content: `${SITE_URL}/blog` },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: `${SITE_URL}/og-image.png` },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Auto Seedance Blog — AI Tutorials & Guides" },
+      { name: "twitter:description", content: "Tutorials, prompt guides, and tool reviews for AI generation." },
+      { name: "twitter:image", content: `${SITE_URL}/og-image.png` },
     ],
     links: [{ rel: "canonical", href: `${SITE_URL}/blog` }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Blog",
+          name: "Auto Seedance Blog",
+          description: "Tutorials, prompt guides, and case studies for AI image and video generation.",
+          url: `${SITE_URL}/blog`,
+          publisher: {
+            "@type": "Organization",
+            name: "Auto Seedance",
+            logo: { "@type": "ImageObject", url: `${SITE_URL}/android-chrome-512x512.png` },
+          },
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+            { "@type": "ListItem", position: 2, name: "Blog", item: `${SITE_URL}/blog` },
+          ],
+        }),
+      },
+    ],
   }),
   component: BlogIndex,
 });

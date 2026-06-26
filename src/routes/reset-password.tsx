@@ -15,9 +15,11 @@ export const Route = createFileRoute("/reset-password")({
   component: ResetPasswordPage,
   head: () => ({
     meta: [
-      { title: "Reset Password — Auto Seedance" },
+      { title: "Reset Your Password — Auto Seedance" },
+      { name: "description", content: "Set a new password for your Auto Seedance account to regain access to AI image and video generation tools." },
       { name: "robots", content: "noindex, nofollow" },
     ],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/reset-password" }],
   }),
 });
 

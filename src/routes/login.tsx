@@ -15,9 +15,13 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
   head: () => ({
     meta: [
-      { title: "Login — Auto Seedance" },
+      { title: "Login — Access Your AI Dashboard | Auto Seedance" },
+      { name: "description", content: "Sign in to your Auto Seedance account to access AI image and video generation tools, manage credits, and view your creation history." },
       { name: "robots", content: "noindex, nofollow" },
+      { property: "og:title", content: "Login — Auto Seedance" },
+      { property: "og:description", content: "Sign in to access your AI generation dashboard." },
     ],
+    links: [{ rel: "canonical", href: "https://autoseedance.site/login" }],
   }),
 });
 

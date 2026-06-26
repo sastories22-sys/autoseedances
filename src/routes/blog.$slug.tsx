@@ -32,23 +32,30 @@ export const Route = createFileRoute("/blog/$slug")({
     if (!post) return {};
     const url = `${SITE_URL}/blog/${params.slug}`;
     const ogImage = post.coverImage.startsWith("http") ? post.coverImage : `${SITE_URL}${post.coverImage}`;
+    const titleWithKeywords = `${post.title} — AI Generation Guide | Auto Seedance Blog`;
     return {
       meta: [
-        { title: `${post.title} — Auto Seedance Blog` },
-        { name: "description", content: post.excerpt },
-        { name: "keywords", content: post.tags.join(", ") },
+        { title: titleWithKeywords },
+        { name: "description", content: post.excerpt.length > 160 ? post.excerpt.slice(0, 157) + "..." : post.excerpt },
+        { name: "keywords", content: [...post.tags, "AI tutorial", "AI generation", "AI guide"].join(", ") },
+        { name: "robots", content: "index, follow, max-image-preview:large" },
         { property: "og:title", content: post.title },
         { property: "og:description", content: post.excerpt },
         { property: "og:url", content: url },
         { property: "og:type", content: "article" },
         { property: "og:image", content: ogImage },
+        { property: "og:image:alt", content: post.title },
         { property: "article:published_time", content: post.date },
+        { property: "article:modified_time", content: post.date },
         { property: "article:author", content: post.author.name },
         { property: "article:section", content: post.category },
+        { property: "article:tag", content: post.tags.join(", ") },
         { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:site", content: "@AutoSeedance" },
         { name: "twitter:title", content: post.title },
         { name: "twitter:description", content: post.excerpt },
         { name: "twitter:image", content: ogImage },
+        { name: "twitter:image:alt", content: post.title },
       ],
       links: [{ rel: "canonical", href: url }],
       scripts: [
@@ -62,13 +69,27 @@ export const Route = createFileRoute("/blog/$slug")({
             image: ogImage,
             datePublished: post.date,
             dateModified: post.date,
-            author: { "@type": "Person", name: post.author.name },
+            author: { "@type": "Person", name: post.author.name, url: `${SITE_URL}/blog` },
             publisher: {
               "@type": "Organization",
               name: "Auto Seedance",
               logo: { "@type": "ImageObject", url: `${SITE_URL}/android-chrome-512x512.png` },
             },
             mainEntityOfPage: { "@type": "WebPage", "@id": url },
+            articleSection: post.category,
+            keywords: post.tags.join(", "),
+          }),
+        },
+        {
+          type: "application/ld+json",
+          children: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+              { "@type": "ListItem", position: 2, name: "Blog", item: `${SITE_URL}/blog` },
+              { "@type": "ListItem", position: 3, name: post.title, item: url },
+            ],
           }),
         },
       ],
