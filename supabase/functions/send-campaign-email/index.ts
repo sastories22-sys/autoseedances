@@ -66,31 +66,43 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Send in batches of 50
-    const batchSize = 50;
+    // PRIVACY FIX: Send individual emails to each recipient
+    // Each user should only see their own email in the "to" field
+    // This prevents exposing email addresses to other recipients
     let totalSent = 0;
+    let failedEmails: string[] = [];
 
-    for (let i = 0; i < emailList.length; i += batchSize) {
-      const batch = emailList.slice(i, i + batchSize);
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: RESEND_FROM_EMAIL,
-          to: batch,
-          subject,
-          html: html_body,
-        }),
-      });
+    for (const email of emailList) {
+      try {
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: RESEND_FROM_EMAIL,
+            to: email, // Only this user's email - privacy safe
+            subject,
+            html: html_body,
+          }),
+        });
 
-      if (res.ok) {
-        totalSent += batch.length;
-      } else {
-        const err = await res.text();
-        console.error("Resend batch error:", err);
+        if (res.ok) {
+          totalSent++;
+        } else {
+          const err = await res.text();
+          console.error(`Failed to send to ${email}:`, err);
+          failedEmails.push(email);
+        }
+
+        // Small delay to avoid rate limiting (Resend allows 10/sec on free tier)
+        if (emailList.indexOf(email) % 10 === 9) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (err) {
+        console.error(`Error sending to ${email}:`, err);
+        failedEmails.push(email);
       }
     }
 
@@ -103,7 +115,12 @@ Deno.serve(async (req: Request) => {
       status: "sent",
     });
 
-    return new Response(JSON.stringify({ success: true, sent_count: totalSent }), {
+    return new Response(JSON.stringify({
+      success: true,
+      sent_count: totalSent,
+      failed_count: failedEmails.length,
+      failed_emails: failedEmails.slice(0, 10) // Only return first 10 failures
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

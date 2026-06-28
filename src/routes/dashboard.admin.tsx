@@ -238,14 +238,15 @@ function Admin() {
     const uid = creditModal.row.id;
     const reason = creditReason.trim() || (creditModal.mode === "add" ? "Admin credit grant" : "Admin credit removal");
 
-    const { data, error } = await supabase.rpc(
-      creditModal.mode === "add" ? "add_credits" : "deduct_credits",
-      {
-        _user_id: uid,
-        _amount: amount,
-        _reason: reason,
-      }
-    );
+    // Use the admin-credits edge function which has service role access
+    const { data, error } = await supabase.functions.invoke("admin-credits", {
+      body: {
+        action: creditModal.mode,
+        user_id: uid,
+        amount: amount,
+        reason: reason,
+      },
+    });
 
     if (error || !data?.success) {
       toast.error(error?.message || data?.error || "Failed to update credits");
